@@ -3,7 +3,17 @@
 /* ===== ব্র্যান্ড: নাম ও লোগো (অ্যাডমিন থেকে বদলায়) ===== */
 window.MTBR=(function(){try{const v=JSON.parse(localStorage.getItem('mt-brand')||'null');if(v&&v.n)return{n:String(v.n),l:String(v.l||'')}}catch(_){}return{n:'Money Transfer',l:''}})();
 function BRN(){return String(window.MTBR.n).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function BRL(z){const l=window.MTBR.l;return /^data:image\//.test(l)||/^https?:\/\//.test(l)?`<img src="${l}" alt="" style="width:${z}px;height:${z}px;object-fit:contain;border-radius:inherit;display:block">`:'৳'}
+function BRL(z){const l=window.MTBR.l;return /^data:image\//.test(l)||/^https?:\/\//.test(l)?`<img class="br-i" src="${l}" alt="">`:'৳'}
+(function(){const st=document.createElement('style');st.textContent=`
+.hero .brand{gap:12px;font-size:17px;font-weight:700;letter-spacing:.3px;text-shadow:0 1px 10px rgba(0,0,0,.25)}
+.hero .brand .logo{width:48px;height:48px;border-radius:16px;font-size:22px;background:linear-gradient(145deg,#fff,#ffe9f3);box-shadow:0 10px 22px -8px rgba(0,0,0,.55),0 0 0 2px rgba(255,255,255,.4),inset 0 -2px 6px rgba(194,24,91,.12);overflow:hidden}
+.br-i{display:block;width:100%;height:100%;object-fit:contain;padding:6px;box-sizing:border-box;border-radius:inherit}
+.au-logo{width:100px;height:100px;border-radius:32px;font-size:48px;margin-bottom:18px}.au-logo::after{border-radius:38px}
+.au-logo .br-i{padding:10px}
+.au-hero h1{font-size:28px;font-weight:800;letter-spacing:.4px;text-shadow:0 2px 14px rgba(0,0,0,.25)}
+.te:has(.br-i){width:92px;height:92px;margin:0 auto;border-radius:28px;background:#fff;box-shadow:0 14px 30px -10px rgba(194,24,91,.45),0 0 0 6px rgba(194,24,91,.08);overflow:hidden}
+.te:has(.br-i) .br-i{padding:10px}
+.wl-lg{width:112px;height:112px;border-radius:34px;overflow:hidden}.wl-lg .br-i{padding:12px}`;document.head.appendChild(st)})();
 document.title=window.MTBR.n;
 /* ===== Supabase ===== */
 const SUPA_URL='https://ucyqfmhpakhqktarkphr.supabase.co';
