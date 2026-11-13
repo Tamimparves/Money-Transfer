@@ -1833,7 +1833,9 @@ const SB=()=>typeof sb!=='undefined'?sb:null;
 const SS=()=>typeof S!=='undefined'?S:null;
 const CC=()=>typeof C!=='undefined'?C:null;
 const norm=s=>{s=String(s||'').toLowerCase();return/^(approved|completed|success)$/.test(s)?'ok':/^(rejected|cancelled|canceled|cancel|failed)$/.test(s)?'no':'pending'};
-let chatOK=null; // null = জানা নেই, true/false
+let chatOK=null,chatFailAt=0,chatLastErr='';
+const chatBlocked=()=>chatOK===false&&Date.now()-chatFailAt<2500; // ব্যর্থ হলে ২.৫ সেকেন্ড পর আবার চেষ্টা
+const chatFail=e=>{chatOK=false;chatFailAt=Date.now();chatLastErr=String((e&&(e.message||e.details||e.code))||e||'')};
 
 /* ---------- প্রিমিয়াম টোন (WebAudio, কোনো ফাইল লাগে না) ---------- */
 let ctx=null,master=null;
@@ -1846,24 +1848,22 @@ function ac(){
  d.delayTime.value=.14;fb.gain.value=.3;wet.gain.value=.32;lp.type='lowpass';lp.frequency.value=3800;
  master.connect(ctx.destination);master.connect(d);d.connect(lp);lp.connect(fb);fb.connect(d);lp.connect(wet);wet.connect(ctx.destination);
  return ctx}
-function bell(f,t0,dur,vol){
- [[1,1,1],[2.01,.34,1.4],[2.76,.16,2.2],[4.2,.06,3]].forEach(([m,g,k])=>{
+/* টোন প্যাক: p=[গুণক, ভলিউম, ক্ষয়], s=পিচ স্কেল, t=সময় স্কেল */
+const PACKS={"bell": {"n": "ঘণ্টা (ডিফল্ট)", "d": "নরম প্রিমিয়াম ঘণ্টা", "p": [[1, 1, 1], [2.01, 0.34, 1.4], [2.76, 0.16, 2.2], [4.2, 0.06, 3]], "s": 1, "t": 1}, "crystal": {"n": "ক্রিস্টাল", "d": "স্বচ্ছ কাচের ঝংকার", "p": [[1, 1, 1], [3, 0.4, 1.6], [5.4, 0.22, 2.6], [8.1, 0.1, 3.5]], "s": 1.12, "t": 1.15}, "marimba": {"n": "মারিম্বা", "d": "উষ্ণ কাঠের সুর", "p": [[1, 1, 1], [4, 0.28, 3], [10, 0.07, 6]], "s": 0.5, "t": 0.55}, "pop": {"n": "পপ", "d": "ছোট ও চটপটে", "p": [[1, 1, 1.2], [2, 0.25, 2.5]], "s": 1, "t": 0.45}, "chime": {"n": "চাইম", "d": "শান্ত দরজার ঘণ্টা", "p": [[1, 1, 1], [2.4, 0.3, 1.5], [3.9, 0.15, 2.4]], "s": 0.85, "t": 1.3}};
+const packId=()=>PACKS[LS('mtn-pack')]?LS('mtn-pack'):'bell';
+function bell(f,t0,dur,vol,P){
+ P.p.forEach(([m,g,k])=>{
   const o=ctx.createOscillator(),e=ctx.createGain();o.type='sine';o.frequency.value=f*m;
   e.gain.setValueAtTime(.0001,t0);e.gain.exponentialRampToValueAtTime(Math.max(.0002,vol*g),t0+.006);e.gain.exponentialRampToValueAtTime(.0001,t0+dur/k);
   o.connect(e);e.connect(master);o.start(t0);o.stop(t0+dur+.05)})}
 /* [ফ্রিকোয়েন্সি, দেরি(s), দৈর্ঘ্য(s), ভলিউম] */
-const TONES={
- order:[[784,0,.9,.2],[1175,.12,1.1,.2],[1568,.26,1.4,.17]],   // নতুন অর্ডার: উঠতি তিন নোট
- chat:[[1175,0,.45,.2],[1568,.09,.6,.17]],                      // চ্যাট: ছোট পপ
- ok:[[523,0,.7,.17],[659,.08,.7,.17],[784,.16,.8,.17],[1047,.25,1.2,.18]], // সফল: আরোহী
- no:[[440,0,.7,.16],[349,.15,1.0,.15]],                         // বাতিল: নরম অবরোহী
- user:[[1047,0,.8,.18],[1397,.14,1.2,.16]],                     // নতুন ইউজার
- soft:[[1175,0,.7,.16]]};
-async function play(n){
- if(!soundOn())return;const c=ac();if(!c||!TONES[n])return;
+const TONES={"order": [[784, 0, 0.9, 0.2], [1175, 0.12, 1.1, 0.2], [1568, 0.26, 1.4, 0.17]], "chat": [[1175, 0, 0.45, 0.2], [1568, 0.09, 0.6, 0.17]], "ok": [[523, 0, 0.7, 0.17], [659, 0.08, 0.7, 0.17], [784, 0.16, 0.8, 0.17], [1047, 0.25, 1.2, 0.18]], "no": [[440, 0, 0.7, 0.16], [349, 0.15, 1.0, 0.15]], "user": [[1047, 0, 0.8, 0.18], [1397, 0.14, 1.2, 0.16]], "soft": [[1175, 0, 0.7, 0.16]]};
+async function play(n,pid,force){
+ if(!force&&!soundOn())return;const c=ac();if(!c||!TONES[n])return;
  if(c.state!=='running'){try{await c.resume()}catch(_){}}
  if(c.state!=='running')return;
- const t=c.currentTime+.03;TONES[n].forEach(([f,o,d,v])=>bell(f,t+o,d,v))}
+ const P=PACKS[pid||packId()],t=c.currentTime+.03;
+ TONES[n].forEach(([f,o,d,v])=>bell(f*P.s,t+o*P.t,d*P.t,v,P))}
 ['pointerdown','touchend','keydown','click'].forEach(ev=>addEventListener(ev,function u(){
  const c=ac();if(!c)return;if(c.state==='running'){['pointerdown','touchend','keydown','click'].forEach(e=>removeEventListener(e,u,true));return}
  c.resume().then(()=>{try{const o=c.createOscillator(),g=c.createGain();g.gain.value=.0001;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.02)}catch(_){}}).catch(()=>{})},true));
@@ -1935,13 +1935,50 @@ function notify(o){
  if(document.hidden){if(!unseen)baseTitle=document.title;unseen++;document.title='('+unseen+') '+baseTitle}
  try{navigator.vibrate&&navigator.vibrate([110,50,110])}catch(_){}}
 function askPerm(){
- if(!('Notification' in window)||Notification.permission!=='default')return;
+ if(!('Notification' in window))return;
+ if(Notification.permission==='denied'){toast({t:'নোটিফিকেশন বন্ধ আছে',b:'ব্রাউজারের Site settings → Notifications → Allow করুন',kind:'no',ms:9000});return}
+ if(Notification.permission!=='default')return;
  LS('mtn-asked',String(Date.now()));
  try{const p=Notification.requestPermission();p&&p.then&&p.then(r=>{if(r==='granted'){play('soft');toast({t:'নোটিফিকেশন চালু হয়েছে',b:'এখন থেকে ট্যাব ব্যাকগ্রাউন্ডে থাকলেও জানানো হবে',kind:'ok'})}})}catch(_){}}
 function sndBtn(){
  let b=document.getElementById('mtn-snd');if(!b){b=document.createElement('button');b.id='mtn-snd';b.type='button';document.body.appendChild(b)}
- const up=()=>{b.className=soundOn()?'':'off';b.innerHTML=svg(soundOn()?'bell':'off');b.title=soundOn()?'নোটিফিকেশন টোন চালু':'নোটিফিকেশন টোন বন্ধ';b.setAttribute('aria-label',b.title)};
- b.onclick=()=>{LS('mtn-snd',soundOn()?'0':'1');up();if(soundOn()){play('soft');askPerm()}};up()}
+ const up=()=>{b.className=soundOn()?'':'off';b.innerHTML=svg(soundOn()?'bell':'off');b.title='নোটিফিকেশন টোন বাছুন';b.setAttribute('aria-label',b.title)};
+ b.onclick=()=>openPicker(up);up()}
+{const s=document.createElement('style');s.textContent=`
+#mtn-pk{position:fixed;inset:0;z-index:100001;background:rgba(20,5,14,.55);backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center;animation:mtnF .2s}
+@keyframes mtnF{from{opacity:0}}
+.mtn-sh{width:100%;max-width:520px;max-height:86vh;overflow-y:auto;background:var(--card,#fff);color:var(--fg,#2a1020);border-radius:26px 26px 0 0;padding:10px 18px calc(20px + env(safe-area-inset-bottom,0px));animation:mtnUp .3s cubic-bezier(.2,.9,.25,1.05);font-family:inherit}
+.mtn-sh:before{content:"";display:block;width:42px;height:4px;border-radius:4px;background:var(--line,#ddd);margin:0 auto 14px}
+.mtn-sh h3{margin:0 0 4px;font-size:18px}.mtn-sh p{margin:0 0 12px;font-size:12.5px;color:var(--mut,#8a6577)}
+.mtn-rw{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border-radius:16px;border:1.5px solid var(--line,#f3d6e4);background:var(--bg,#fff);color:inherit;font:inherit;text-align:left;margin-bottom:8px;cursor:pointer}
+.mtn-rw.on{border-color:var(--brand,#c2185b);background:var(--soft,#fde7f1)}.mtn-rw b{display:block;font-size:14px}.mtn-rw small{color:var(--mut,#8a6577);font-size:12px}
+.mtn-rw div{flex:1;min-width:0}.mtn-pl{flex:none;width:38px;height:38px;border-radius:50%;border:0;background:var(--brand,#c2185b);color:#fff;display:grid;place-items:center;padding:0;cursor:pointer;font-size:14px}
+.mtn-ck{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line,#ddd);display:grid;place-items:center;color:#fff;font-size:13px}.mtn-rw.on .mtn-ck{background:var(--brand,#c2185b);border-color:var(--brand,#c2185b)}
+.mtn-tg{display:flex;gap:6px;margin:4px 0 12px}.mtn-tg button{flex:1;padding:9px 4px;border-radius:12px;border:1px solid var(--line,#f3d6e4);background:var(--bg,#fff);color:inherit;font:inherit;font-size:12.5px;cursor:pointer}
+.mtn-sw{flex:none;width:44px;height:26px;border-radius:13px;background:var(--line,#ddd);position:relative;transition:.2s}.mtn-sw:after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}.mtn-sw.on{background:var(--brand,#c2185b)}.mtn-sw.on:after{left:21px}`;document.head.appendChild(s)}
+function openPicker(done){
+ let e=document.getElementById('mtn-pk');if(e)e.remove();
+ e=document.createElement('div');e.id='mtn-pk';
+ const draw=()=>{
+  const cur=packId(),perm=('Notification' in window&&!isNative())?Notification.permission:null;
+  e.innerHTML=`<div class="mtn-sh" role="dialog" aria-label="নোটিফিকেশন টোন"><h3>নোটিফিকেশন টোন</h3><p>টোন বেছে নিন, ▶ চেপে শুনে দেখুন</p>
+  <button class="mtn-rw" data-t="snd"><div><b>টোন চালু</b><small>${soundOn()?'এখন চালু আছে':'এখন বন্ধ আছে'}</small></div><span class="mtn-sw ${soundOn()?'on':''}"></span></button>
+  ${Object.keys(PACKS).map(id=>`<div class="mtn-rw ${id===cur?'on':''}" data-p="${id}" role="button" tabindex="0"><button class="mtn-pl" data-pl="${id}" aria-label="শুনুন">▶</button><div><b>${PACKS[id].n}</b><small>${PACKS[id].d}</small></div><span class="mtn-ck">${id===cur?'✓':''}</span></div>`).join('')}
+  <div class="mtn-tg"><button data-ty="order">অর্ডার</button><button data-ty="chat">চ্যাট</button><button data-ty="ok">সফল</button><button data-ty="no">বাতিল</button></div>
+  ${perm==='default'?'<button class="mtn-rw" data-t="perm"><div><b>ব্রাউজার নোটিফিকেশন চালু করুন</b><small>ট্যাব ব্যাকগ্রাউন্ডে থাকলেও জানাবে</small></div></button>':''}
+  ${perm==='denied'?'<p>ব্রাউজার নোটিফিকেশন বন্ধ আছে। ঠিকানার বারের 🔒 বা ⋮ → Site settings → Notifications → Allow করুন।</p>':''}
+  <button class="mtn-rw" data-t="x" style="justify-content:center"><b>বন্ধ করুন</b></button></div>`};
+ e.addEventListener('click',ev=>{
+  const t=ev.target.closest('[data-t],[data-p],[data-pl],[data-ty]');
+  if(!t){if(ev.target===e){e.remove();done&&done()}return}
+  const d=t.dataset;
+  if(d.pl){ev.stopPropagation();play('order',d.pl,true);return}
+  if(d.ty){play(d.ty,null,true);return}
+  if(d.p){LS('mtn-pack',d.p);play('order',d.p,true);draw();try{nativeChannels&&nativeChannels().then(()=>{pushSaved='';saveTok()})}catch(_){}return}
+  if(d.t==='snd'){LS('mtn-snd',soundOn()?'0':'1');if(soundOn())play('soft',null,true);draw();done&&done();return}
+  if(d.t==='perm'){askPerm();setTimeout(draw,1500);return}
+  if(d.t==='x'){e.remove();done&&done()}});
+ draw();document.body.appendChild(e)}
 
 /* ---------- শেয়ার্ড: রিয়েলটাইম + দ্রুত পোলিং ---------- */
 let busy=0,again=0,tmr=null;
@@ -1990,12 +2027,12 @@ async function adminTick(){
  }
  const c=await s.from('mtusers').select('id',{count:'exact',head:true});
  if(!c.error&&typeof c.count==='number'){const p=LS('mtn-a-uc');LS('mtn-a-uc',String(c.count));if(p!==null&&c.count>+p){notify({t:'নতুন ইউজার রেজিস্টার করেছেন',b:'মোট ইউজার '+bn(c.count)+' জন',kind:'user',tone:'user',tag:'usr'});if(typeof loadAdminData==='function')loadAdminData(true)}}
- if(chatOK!==false)await adminChat();
+ if(!chatBlocked())await adminChat();
 }
 async function adminChat(){
  const s=SB(),first=!acLoaded;
  const r=first?await s.from('mt_chat').select('*').order('id',{ascending:false}).limit(400):await s.from('mt_chat').select('*').gt('id',acMax).order('id',{ascending:true});
- if(r.error){if(chatErr(r.error)){chatOK=false;AP.refresh()}return}
+ if(r.error){chatFail(r.error);AP.refresh();return}
  chatOK=true;acLoaded=true;
  let rows=r.data||[];if(first)rows.reverse();
  const incoming=[];
@@ -2033,7 +2070,7 @@ const AP={open:0,uid:null,btn:null,pan:null,
   AP.init();AP.open=1;AP.uid=uid;AP.pan.classList.add('on');
   if(uid==null){
    let body;
-   if(chatOK===false)body=`<div class="mtn-em"><b>চ্যাট টেবিল তৈরি হয়নি</b><br>Supabase → SQL Editor এ <code>chat.sql</code> ফাইলটি একবার Run করুন, তারপর এখানে ইউজারদের মেসেজ আসবে।</div>`;
+   if(chatOK===false){body=`<div class="mtn-em"><b>চ্যাট এখনো সংযুক্ত হয়নি</b><br>কয়েক সেকেন্ডের মধ্যে নিজে আবার চেষ্টা করবে। না হলে Supabase-এ <code>chat.sql</code> Run করা হয়েছে কি না দেখুন।<br><small style="opacity:.7;word-break:break-all">${esc(chatLastErr)}</small></div>`;setTimeout(tick,200)}
    else{const cv=AP.convs();body=cv.length?cv.map(c=>`<button class="mtn-cv" data-u="${esc(c.u)}"><span class="mtn-av">${esc(uName(c.u).trim().charAt(0)||'?')}</span><div><b>${esc(uName(c.u))}</b><small>${c.last.from_admin?'আপনি: ':''}${esc(c.last.body)}</small></div>${c.n?`<em>${c.n}</em>`:''}</button>`).join(''):`<div class="mtn-em">এখনো কোনো মেসেজ আসেনি।<br>ইউজার অ্যাপের লাইভ চ্যাটে লিখলে এখানে দেখা যাবে।</div>`}
    AP.pan.innerHTML=`<div class="mtn-ph"><b>লাইভ চ্যাট</b><button data-x aria-label="বন্ধ">${svg('x')}</button></div><div class="mtn-pb">${body}</div>`;
    AP.badge();return}
@@ -2078,11 +2115,11 @@ async function userTick(){
     if(i===0)notify(Object.assign({tone:n==='ok'?'ok':'no',tag:'tx'},o));else toast(o)});
    if(typeof loadUserData==='function')loadUserData(true)}
   else if(!first&&Object.keys(nm).some(k=>!(k in old))&&typeof loadUserData==='function')loadUserData(true)}
- if(chatOK!==false)await userChat(s,uid)}
+ if(!chatBlocked())await userChat(s,uid)}
 async function userChat(s,uid){
  const key='mtn-uc-'+uid,raw=LS(key);
  const r=raw===null?await s.from('mt_chat').select('id').eq('user_id',uid).order('id',{ascending:false}).limit(1):await s.from('mt_chat').select('*').eq('user_id',uid).gt('id',+raw).order('id',{ascending:true});
- if(r.error){if(chatErr(r.error))chatOK=false;return}
+ if(r.error){chatFail(r.error);return}
  chatOK=true;
  if(raw===null){LS(key,String(r.data&&r.data[0]?r.data[0].id:0));return}
  const rows=r.data||[];if(!rows.length)return;
@@ -2097,9 +2134,9 @@ async function userChat(s,uid){
 /* index.html এর live() এখান থেকে আসল চ্যাট খোলে; টেবিল না থাকলে আগের বট চ্যাট */
 async function liveChat(E){
  const St=SS(),s=SB();
- if(!St||!St.uid||!s||chatOK===false)return E.bot();
+ if(!St||!St.uid||!s||chatBlocked())return E.bot();
  const r=await s.from('mt_chat').select('*').eq('user_id',St.uid).order('id',{ascending:true}).limit(300);
- if(r.error){if(chatErr(r.error)){chatOK=false;return E.bot()}E.tt&&E.tt('চ্যাট লোড হয়নি');return}
+ if(r.error){chatFail(r.error);return E.bot()}
  chatOK=true;const {show,Q,L,ic}=E;
  const rows=r.data||[];
  if(rows.length)LS('mtn-uc-'+St.uid,String(rows[rows.length-1].id));else if(LS('mtn-uc-'+St.uid)===null)LS('mtn-uc-'+St.uid,'0');
@@ -2116,16 +2153,65 @@ async function liveChat(E){
    LS('mtn-uc-'+St.uid,String(Math.max(+(LS('mtn-uc-'+St.uid)||0),x.data.id)))};
   Q('[data-s]').onclick=send;Q('#m').onkeydown=e=>{if(e.key==='Enter')send()}})}
 
+/* ---------- অ্যাপ (Capacitor): অ্যাপ বন্ধ থাকলেও পুশ নোটিফিকেশন ---------- */
+const isNative=()=>{try{return !!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())}catch(_){return false}};
+let pushTok=null,pushSaved='';
+async function nativePush(){
+ if(!isNative())return;
+ const PN=window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;if(!PN)return;
+ try{
+  await nativeChannels();
+  let p=await PN.checkPermissions();if(p.receive!=='granted')p=await PN.requestPermissions();
+  if(p.receive!=='granted')return;
+  PN.addListener('registration',t=>{pushTok=t.value;saveTok()});
+  PN.addListener('pushNotificationActionPerformed',()=>{try{kick()}catch(_){}});
+  await PN.register();
+  setInterval(saveTok,4000);
+ }catch(_){}}
+const CH_CATS=[['orders','নতুন অর্ডার'],['chat','চ্যাট মেসেজ'],['ok','সফল'],['no','বাতিল']];
+async function nativeChannels(){
+ if(!isNative())return;const PN=window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;if(!PN)return;
+ const id=packId(),prev=LS('mtn-chpack');
+ try{
+  if(prev&&prev!==id)for(const [c] of CH_CATS){try{await PN.deleteChannel({id:c+'_'+prev})}catch(_){}}
+  for(const [c,n] of CH_CATS)await PN.createChannel({id:c+'_'+id,name:n,importance:5,sound:'tone_'+id+'_'+c+'.wav',vibration:true,visibility:1});
+  LS('mtn-chpack',id)}catch(_){}}
+async function saveTok(){
+ const s=SB();if(!s||!pushTok)return;
+ const St=SS(),uid=ROLE==='admin'?null:(St&&St.uid);
+ if(ROLE!=='admin'&&!uid)return;
+ const k=pushTok+'|'+uid+'|'+packId();if(k===pushSaved)return;
+ const r=await s.from('mt_push_tokens').upsert({token:pushTok,user_id:uid,role:ROLE==='admin'?'admin':'user',tone:packId(),updated_at:new Date().toISOString()});
+ if(!r.error)pushSaved=k}
+
 /* ---------- চালু করা ---------- */
 window.MTN={play,notify,toast,liveChat,tick,askPerm};
+// লগইন স্ক্রিনে চ্যাট ও টোন বাটন লুকানো থাকবে, লগইনের পর দেখাবে
+function vis(){
+ let on;
+ if(ROLE==='admin')on=!document.getElementById('al');
+ else{const St=SS();on=!!(St&&St.uid)}
+ ['mtn-cb','mtn-snd'].forEach(id=>{const b=document.getElementById(id);if(b)b.style.display=on?'':'none'});
+ if(!on&&AP.open)AP.close()}
 function boot(){
- sndBtn();if(ROLE==='admin')AP.init();
+ sndBtn();setInterval(vis,400);if(ROLE==='admin')AP.init();
  tick();setInterval(()=>{tick()},document.hidden?8000:3000);
  setInterval(()=>{if(document.hidden)tick()},8000);
  addEventListener('online',tick);
  if(ROLE==='admin')ensureRt('admin');
  try{if(('serviceWorker' in navigator)&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(_){}
- setTimeout(()=>{try{if('Notification' in window&&Notification.permission==='default'&&Date.now()-(+LS('mtn-asked')||0)>3*864e5)toast({t:'নোটিফিকেশন চালু করুন',b:'নতুন '+(ROLE==='admin'?'অর্ডার ও মেসেজ':'আপডেট ও মেসেজ')+' সাথে সাথে পেতে এখানে চাপুন',kind:'bell',ms:12000,go:askPerm})}catch(_){}},4000)}
+ if(!isNative())permBanner();
+ nativePush();
+ // সাইটের যেকোনো জায়গায় প্রথম ট্যাপেই ব্রাউজারের অনুমতি চাইবে
+ const once=()=>{removeEventListener('click',once,true);removeEventListener('touchend',once,true);if('Notification' in window&&Notification.permission==='default')askPerm()};
+ if(!isNative()){addEventListener('click',once,true);addEventListener('touchend',once,true)}}
+function permBanner(){
+ try{
+  if(!('Notification' in window)){return}
+  const p=Notification.permission;
+  if(p==='default')setTimeout(()=>toast({t:'নোটিফিকেশন চালু করুন',b:'নতুন '+(ROLE==='admin'?'অর্ডার ও মেসেজ':'আপডেট ও মেসেজ')+' সাথে সাথে পেতে এখানে চাপুন, তারপর "Allow" দিন',kind:'bell',ms:15000,go:askPerm}),1200);
+  else if(p==='denied'&&Date.now()-(+LS('mtn-dn')||0)>864e5){LS('mtn-dn',String(Date.now()));setTimeout(()=>toast({t:'নোটিফিকেশন বন্ধ আছে',b:'ব্রাউজারের ঠিকানার বারে 🔒 বা ⋮ → Site settings → Notifications → Allow করুন',kind:'no',ms:12000}),1500)}
+ }catch(_){}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
 </script>
