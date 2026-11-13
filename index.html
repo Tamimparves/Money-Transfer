@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#7a0c3a"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Money Transfer"><link rel="icon" type="image/png" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script>
 /* ===== ব্র্যান্ড: নাম ও লোগো (অ্যাডমিন থেকে বদলায়) ===== */
 window.MTBR=(function(){try{const v=JSON.parse(localStorage.getItem('mt-brand')||'null');if(v&&v.n)return{n:String(v.n),l:String(v.l||'')}}catch(_){}return{n:'Money Transfer',l:''}})();
@@ -1826,12 +1826,20 @@ getDb().then(db=>{if(db)db.collection('mtmsgs').onSnapshot(s=>s.docs.forEach(d=>
 function emit(ev){ev.id='e'+Date.now()+Math.floor(Math.random()*99);ev.ts=Date.now();try{const k='mt-events',a=JSON.parse(localStorage.getItem(k)||'{}');a[ev.id]=ev;localStorage.setItem(k,JSON.stringify(a))}catch(_){}getDb().then(db=>db&&db.collection('mtevents').doc(ev.id).set(ev)).catch(()=>{})}
 let lu=null,lt=0,ln=0;setInterval(()=>{try{const u=me();if(u!==lu){lu=u;lt=Date.now();ln=S.tx.length;return}if(!u||Date.now()-lt<4000){ln=S.tx.length;return}const n=S.tx.length-ln;if(n>0)for(let i=Math.min(n,5)-1;i>=0;i--){const x=S.tx[i];emit({kind:'req',user:u,t:x.in?'💰 নতুন অ্যাড মানি রিকোয়েস্ট':'💸 নতুন ট্রান্সফার রিকোয়েস্ট',b:String(x.name||'')+' · ৳'+Math.round(x.bdt||0),amt:x.bdt||0,inn:x.in?1:0,m:String(x.name||''),num:String(x.num||'')})}ln=S.tx.length}catch(_){}},1500);
 function backH(){const p=document.querySelector('.cn-bg');if(p){if(!p.querySelector('#ca'))p.remove();return true}
+ const pk=document.getElementById('mtn-pk');if(pk){pk.remove();return true}
+ const cp=document.querySelector('.au-cp');if(cp){cp.remove();return true}
+ const au=document.getElementById('au');
+ if(au&&!au.classList.contains('out')){const ab=au.querySelector('[data-bk]');if(ab){ab.click();return true}
+  if(au.querySelector('.au-st')){const ti=au.querySelector('[data-tab="in"]');if(ti){ti.click();return true}}
+  return false}
  const o=document.getElementById('ov');if(o&&o.classList.contains('on')){const b=o.querySelector('[data-b]')||o.querySelector('[data-c]');if(b){b.click();return true}o.classList.remove('on');o.innerHTML='';return true}
  const bk=document.querySelector('[data-bk]');if(bk){bk.click();return true}
+ if(S.sheet){S.sheet=null;render();return true}
  if(S.tab!=='home'){const h=document.querySelector('.nav [data-go="home"]');if(h){h.click();return true}}
  return false}
 const hs=(f,...a)=>{try{if(typeof history[f]==='function')history[f](...a)}catch(_){}};hs('replaceState',{g:0},'');hs('pushState',{g:1},'');
 addEventListener('popstate',()=>{if(backH())hs('pushState',{g:1},'');else hs('back')});
+try{const Ap=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App;if(Ap&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())Ap.addListener('backButton',()=>{if(!backH())Ap.exitApp()})}catch(_){}
 new MutationObserver(()=>document.querySelectorAll('input[type=password]').forEach(i=>{i.inputMode='numeric';i.maxLength=6})).observe(document.body,{childList:true,subtree:true});
 })();
 </script>

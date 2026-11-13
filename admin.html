@@ -396,9 +396,13 @@ if(Date.now()-(ev.ts||0)<12e4)apop(ev.t,'@'+ev.user+' · '+ev.b)}
 setInterval(()=>{try{Object.values(JSON.parse(localStorage.getItem('mt-events')||'{}')).forEach(gotE)}catch(_){}},1200);
 try{claude.use('db').then(db=>db&&db.collection('mtevents').onSnapshot(s=>s.docs.forEach(d=>d.exists&&gotE(d.data())),()=>{})).catch(()=>{})}catch(_){}
 {const A0=ACT.appr,J0=ACT.rej,nt=(id,ok)=>{const r=C.reqs.find(x=>x.id==id);if(r&&r.sid){sendMsg({to:r.sid,t:ok?'✅ রিকোয়েস্ট অ্যাপ্রুভ হয়েছে':'❌ রিকোয়েস্ট বাতিল হয়েছে',b:(r.m||'')+' · ৳'+fm(r.a||0)});save()}};ACT.appr=id=>{A0(id);nt(id,1)};ACT.rej=id=>{J0(id);nt(id,0)}}
-function backA(){const p=document.querySelector('.apn');if(p){p.remove();return true}const z=document.querySelector('#zoom,.zoom');if(z){z.click();return true}if(uid){uid=null;R();return true}if(tab!=='home'){ACT.tab('home');return true}return false}
+function backA(){const p=document.querySelector('.apn');if(p){p.remove();return true}const lb=document.getElementById('lb');if(lb){lb.remove();return true}
+const pk=document.getElementById('mtn-pk');if(pk){pk.remove();return true}
+const cp=document.querySelector('#mtn-cp.on');if(cp){const b=cp.querySelector('[data-bk]')||cp.querySelector('[data-x]');if(b){b.click();return true}}
+const z=document.querySelector('#zoom,.zoom');if(z){z.click();return true}if(uid){uid=null;R();return true}if(tab!=='home'){ACT.tab('home');return true}return false}
 history.replaceState({g:0},'');history.pushState({g:1},'');
 addEventListener('popstate',()=>{if(backA())history.pushState({g:1},'');else history.back()});
+try{const Ap=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App;if(Ap&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())Ap.addListener('backButton',()=>{if(!backA())Ap.exitApp()})}catch(_){}
 const V3=V.users;V.users=()=>uid?V3()+LCd():V3();
 (async()=>{if(C.auth0)return;const s=rnd(8);C.auth={u:'admin',s,h:await hx(s+'000000'),rh:await hx('000000')};C.fail={n:0,u:0};C.auth0=1;save();if($('#al'))AL('login')})();
 R();
