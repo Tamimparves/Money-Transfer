@@ -1,7 +1,7 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script>
 /* ===== Supabase ===== */
-const SUPA_URL='https://ucvqfmhpakhqktarkphr.supabase.co';
+const SUPA_URL='https://ucyqfmhpakhqktarkphr.supabase.co';
 const SUPA_KEY='sb_publishable_TG-pGp2iue1WiMNBYABlvw_WRtjqwUS';
 const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
 const mtEmail=u=>String(u).trim().toLowerCase()+'@gmail.com';
@@ -48,7 +48,7 @@ async function saveProfile(){
 }
 setInterval(()=>{if(S.uid&&!mtSyncing&&!document.hidden)loadUserData(true)},10000);
 </script>
-</head><body>
+<style id="mt-smooth">#au.out{opacity:0;transform:scale(1.03);pointer-events:none}@keyframes mtIn{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}body.mt-in #app{animation:mtIn .7s cubic-bezier(.2,.8,.2,1) both}</style></head><body>
 <title>Money Transfer</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@400;500;600;700&family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@500;600&display=swap">
@@ -1155,7 +1155,7 @@ const getSess=()=>{try{return sessionStorage.getItem(SESS)||localStorage.getItem
 const setSess=(v,keep)=>{try{sessionStorage.removeItem(SESS);localStorage.removeItem(SESS);if(v)(keep?localStorage:sessionStorage).setItem(SESS,v)}catch(_){}};
 let au=null,auMode='in',rs=0,rg={},fails=0,until=0;
 const auErr=m=>{const er=au&&au.querySelector('#er');if(!er)return;er.textContent=m;er.classList.remove('on');void er.offsetWidth;er.classList.add('on');try{navigator.vibrate&&navigator.vibrate(80)}catch(_){}};
-function auClose(){if(!au)return;const x=au;au=null;x.classList.add('out');setTimeout(()=>x.remove(),380)}
+function auClose(){if(!au)return;const x=au;au=null;x.style.transition='opacity .7s ease,transform .7s ease';x.classList.add('out');setTimeout(()=>x.remove(),750)}
 function auShell(inner){
  if(!au){au=document.createElement('div');au.id='au';document.body.appendChild(au)}
  const e=au;e.classList.remove('out');
@@ -1181,11 +1181,12 @@ function login(pre){auMode='in';
   if(Date.now()<until)return auErr(L('অনেকবার ভুল। '+Math.ceil((until-Date.now())/1000)+' সেকেন্ড অপেক্ষা করুন','Too many attempts. Wait '+Math.ceil((until-Date.now())/1000)+'s'));
   if(!un||!pw)return auErr(L('ইউজারনেম ও পাসওয়ার্ড দিন','Enter username and password'));
   bt.classList.add('ld');bt.disabled=true;
-  let ok=false;try{const r=await sb.auth.signInWithPassword({email:mtEmail(un),password:pw});if(!r.error&&r.data&&r.data.user){ok=true;S.uid=r.data.user.id}}catch(_){}
+  let ok=false,net=false;try{const r=await sb.auth.signInWithPassword({email:mtEmail(un),password:pw});if(!r.error&&r.data&&r.data.user){ok=true;S.uid=r.data.user.id}else if(r.error&&/fetch|network|timeout/i.test(r.error.message||''))net=true}catch(_){net=true}
+  if(!ok&&net){bt.classList.remove('ld');bt.disabled=false;return auErr(L('সার্ভারে কানেক্ট হচ্ছে না। ইন্টারনেট চেক করুন','Cannot reach server. Check internet'))}
   if(!ok){bt.classList.remove('ld');bt.disabled=false;if(++fails>=5){fails=0;until=Date.now()+30000}f.classList.remove('shk');void f.offsetWidth;f.classList.add('shk');return auErr(L('ইউজারনেম বা পাসওয়ার্ড ভুল','Wrong username or password'))}
   fails=0;S.user=un;setSess(un,e.querySelector('#rm').checked);await loadUserData();
   bt.classList.remove('ld');bt.classList.add('dn');bt.innerHTML='✓';
-  setTimeout(()=>{auClose();render();setTimeout(()=>tt(L('স্বাগতম, '+(S.name||un)+'!','Welcome, '+(S.name||un)+'!')),350)},550)}}
+  setTimeout(()=>{render();document.body.classList.add('mt-in');setTimeout(()=>document.body.classList.remove('mt-in'),900);auClose();setTimeout(()=>tt(L('স্বাগতম, '+(S.name||un)+'!','Welcome, '+(S.name||un)+'!')),350)},550)}}
 const fi=(id,ico,lab,o={})=>`<label class="au-i"><span>${ic(ico)}</span><input id="${id}" type="${o.t||'text'}" placeholder=" " value="${esc(rg[id]||'')}" autocomplete="${o.a||'off'}" ${o.m?`inputmode="${o.m}"`:''}><b>${lab}</b>${o.eye?`<button type="button" class="au-eye" data-eye aria-label="show">${ic('eye')}</button>`:''}</label>`;
 // ---- country picker (all countries + real flag images, emoji fallback)
 const CCX=new Set('AC CP DG EA EU EZ IC TA UN XA XB QO ZZ'.split(' '));
@@ -1236,7 +1237,8 @@ function register(){auMode='up';
  q('[data-nx]').onclick=async()=>{const m=chk();if(m)return auErr(m);if(rs<2){rs++;register();return}
   const bt=q('[data-nx]');bt.classList.add('ld');bt.disabled=true;
   const un=v('user').toLowerCase();
-   const su=await sb.auth.signUp({email:mtEmail(un),password:String(rg.pw)});
+   let su;try{su=await sb.auth.signUp({email:mtEmail(un),password:String(rg.pw)})}catch(ex){su={error:{message:String(ex&&ex.message||ex)}}}
+   if(su.error&&/fetch|network|timeout|load failed/i.test(su.error.message||'')){bt.classList.remove('ld');bt.disabled=false;return auErr(L('সার্ভারে কানেক্ট হচ্ছে না। ইন্টারনেট চেক করুন বা কিছুক্ষণ পর আবার চেষ্টা করুন','Cannot reach server. Check internet or try again later'))}
    if(su.error||!su.data||!su.data.user||!(su.data.user.identities||[1]).length){bt.classList.remove('ld');bt.disabled=false;const em=su.error?su.error.message:'';return auErr(!su.error||/already|registered/i.test(em)?L('ইউজারনেম আগেই আছে','Username already taken'):L('অ্যাকাউন্ট খোলা যায়নি: ','Could not sign up: ')+em)}
    const uid=su.data.user.id,us0={name:v('name'),email:v('email'),mob:dig(v('mob')),country:cn(rg.cc||'BD'),nid:dig(v('nid'))};
    await sb.from('mtusers').insert({id:uid,name:us0.name,mob:us0.mob,email:us0.email});
