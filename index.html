@@ -3,7 +3,7 @@
 /* ===== Supabase ===== */
 const SUPA_URL='https://ucyqfmhpakhqktarkphr.supabase.co';
 const SUPA_KEY='sb_publishable_TG-pGp2iue1WiMNBYABlvw_WRtjqwUS';
-const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY,{global:{fetch:(u,o)=>{o=o||{};if(o.headers){try{o=Object.assign({},o,{headers:Object.fromEntries(new Headers(o.headers).entries())})}catch(_){}}return fetch(u,o)}}});
 const mtEmail=u=>String(u).trim().toLowerCase()+'@gmail.com';
 let mtSyncing=0,mtSig='',mtProfSig='';
 const mtDate=s=>{const n=new Date(s);return n.getDate()+'/'+(n.getMonth()+1)+'/'+n.getFullYear()};
