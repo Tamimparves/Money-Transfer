@@ -185,7 +185,7 @@ const TYN={add:'💰 অ্যাড মানি',wd:'🏧 উইথড্র',
 const RV=(ty,t,s)=>{const L=C.reqs.filter(r=>!ty||r.ty==ty).sort((a,b)=>(a.st=='p'?0:1)-(b.st=='p'?0:1)||b.id-a.id),n=x=>fm(L.filter(r=>r.st==x).length);return`<h2>${t}</h2><p class="h">${s}</p><div class="stats"><div class="stat"><small>পেন্ডিং</small><b>${n('p')}</b></div><div class="stat"><small>সফল</small><b>${n('a')}</b></div><div class="stat"><small>বাতিল</small><b>${n('r')}</b></div></div>`+(L.map(r=>{const u=C.users.find(x=>x.id==r.u);return`<div class="card ur"><div><b>${TYN[r.ty]||r.ty}</b> · ${esc(uname(r.u))}<br><small style='display:inline-flex;align-items:center;gap:6px'>${LG(r.m,18)} ${esc(r.m)} · ${r.ty=='bank'?'অ্যাকাউন্ট ':''}${esc(r.trx)}${r.ty=='add'&&r.st=='p'?' · বোনাস ৳'+fm(bonus(u,r.a)):''}</small></div><div style="text-align:right"><label class='lgu' style='font-size:12px;color:var(--brand)'>📎 ${r.img?'বদলান':'স্ক্রিনশট'}<input type='file' accept='image/*' hidden data-lg='reqs:${C.reqs.indexOf(r)}:img'></label> ${r.img?`<img src='${r.img}' data-a='zoom' data-src='${r.img}' alt='' style='width:40px;height:40px;border-radius:9px;object-fit:cover;cursor:pointer;vertical-align:middle'>`:''}<br>${r.a?`<b>৳${fm(r.a)}</b><br>`:''}<span class="tag ${r.st=='a'?'ok':r.st=='r'?'bad':'w'}">${r.st=='a'?'সফল':r.st=='r'?'বাতিল':'পেন্ডিং'}</span></div>${r.st=='p'?`<div class="ac"><button class="b o s" data-a="appr:${r.id}">অ্যাপ্রুভ</button><button class="b r s" data-a="rej:${r.id}">রিজেক্ট</button></div>`:''}</div>`}).join('')||'<p class="h">কোনো রিকোয়েস্ট নেই</p>')};
 Object.assign(V,{reqs:()=>RV(0,'সব অর্ডার ও রিকোয়েস্ট','সব ধরনের নতুন রিকোয়েস্ট এক জায়গায়'),r_add:()=>RV('add','অ্যাড মানি অর্ডার','অ্যাপ্রুভ করলে বোনাসসহ ব্যালেন্সে যোগ হবে'),r_wd:()=>RV('wd','উইথড্র অর্ডার','রিজেক্ট করলে টাকা ইউজারকে ফেরত যাবে'),r_bank:()=>RV('bank','ব্যাংক অ্যাড রিকোয়েস্ট','ইউজারের নতুন ব্যাংক অ্যাকাউন্ট যোগের অনুরোধ'),r_tr:()=>RV('tr','ট্রান্সফার অর্ডার','ব্যাংকিং ও এম-ব্যাংকিং ট্রান্সফার'),r_rc:()=>RV('rc','রিচার্জ অর্ডার','মোবাইল রিচার্জ রিকোয়েস্ট'),r_bill:()=>RV('bill','পে-বিল অর্ডার','বিল পেমেন্ট রিকোয়েস্ট'),r_loan:()=>RV('loan','লোন রিকোয়েস্ট','অ্যাপ্রুভ করলে লোনের টাকা ব্যালেন্সে যোগ হবে')});
 const P0=V.pay;V.pay=()=>P0()+'<b>ব্যাংক লিস্ট (ব্যাংকিং ট্রান্সফার)</b>'+tbl('banks');
-ACT.appr=async id=>{const r=C.reqs.find(x=>x.id==id);if(!r||r.st!='p')return;try{const raw=r.raw||r.ty,isAdd=raw=='add',isOut=raw=='send'||raw=='withdraw';let bal=0;if(isAdd||isOut){const{data:w,error:e0}=await sb.from('wallets').select('balance').eq('user_id',r.u).single();if(e0)throw e0;bal=Number(w.balance||0);if(isOut&&bal<Number(r.a)){tt('ইউজারের ব্যালেন্স কম, অ্যাপ্রুভ হয়নি');return}}const{data:upd,error:e1}=await sb.from('transactions').update({status:'success'}).eq('id',id).eq('status','pending').select();if(e1)throw e1;if(!upd||!upd.length){tt('আগেই প্রসেস হয়ে গেছে');return loadAdminData()}if(isAdd||isOut){const nb=isAdd?bal+Number(r.a):bal-Number(r.a);const{error:e3}=await sb.from('wallets').update({balance:nb}).eq('user_id',r.u);if(e3)throw e3}tt('অ্যাপ্রুভ হয়েছে');await loadAdminData()}catch(e){console.error(e);tt('ত্রুটি: '+(e.message||e))}};
+ACT.appr=async id=>{const r=C.reqs.find(x=>x.id==id);if(!r||r.st!='p')return;try{const raw=r.raw||r.ty,isAdd=raw=='add',isOut=raw=='send'||raw=='withdraw'||raw=='recharge'||raw=='bill';let bal=0;if(isAdd||isOut){const{data:w,error:e0}=await sb.from('wallets').select('balance').eq('user_id',r.u).single();if(e0)throw e0;bal=Number(w.balance||0);if(isOut&&bal<Number(r.a)){tt('ইউজারের ব্যালেন্স কম, অ্যাপ্রুভ হয়নি');return}}const{data:upd,error:e1}=await sb.from('transactions').update({status:'success'}).eq('id',id).eq('status','pending').select();if(e1)throw e1;if(!upd||!upd.length){tt('আগেই প্রসেস হয়ে গেছে');return loadAdminData()}if(isAdd||isOut){const nb=isAdd?bal+Number(r.a):bal-Number(r.a);const{error:e3}=await sb.from('wallets').update({balance:nb}).eq('user_id',r.u);if(e3)throw e3}tt('অ্যাপ্রুভ হয়েছে');await loadAdminData()}catch(e){console.error(e);tt('ত্রুটি: '+(e.message||e))}};
 ACT.rej=async id=>{try{const{error}=await sb.from('transactions').update({status:'rejected'}).eq('id',id).eq('status','pending');if(error)throw error;tt('রিজেক্ট হয়েছে');await loadAdminData()}catch(e){console.error(e);tt('ত্রুটি: '+(e.message||e))}};
 ACT.rnew=ty=>{const u=C.users[0];if(!u)return tt('আগে ইউজার যোগ করুন');const k=Object.keys(TYN),t=ty||k[Math.floor(Math.random()*k.length)],b=t=='bank';C.reqs.push({id:Date.now(),ty:t,u:u.id,a:b?0:[500,1000,2000][Math.floor(Math.random()*3)],m:b?'DBBL':t=='rc'?'Grameenphone':t=='bill'?'Electricity':'bKash',trx:b?'10'+Math.floor(Math.random()*1e8):'TRX'+Math.floor(Math.random()*9999),st:'p'});save();R();tt('নতুন রিকোয়েস্ট এসেছে')};
 let uid=null;const U0=V.users;
@@ -417,7 +417,7 @@ async function loadAdminData(quiet){
     if(quiet){const g=JSON.stringify([users,wallets,reqs]);if(g===__sig)return;const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;__sig=g}else __sig=JSON.stringify([users,wallets,reqs]);
     C.users=(users||[]).map(u=>{const w=(wallets||[]).find(x=>x.user_id===u.id);
       return Object.assign({n:'',ph:'',add:0,st:1,pwl:[]},u,{n:u.n||u.name||u.full_name||'',ph:u.ph||u.phone||u.mobile||u.mob||'',bal:w?Number(w.balance||0):0})});
-    C.reqs=(reqs||[]).map(r=>({id:r.id,u:r.user_id,a:Number(r.amount||0),raw:r.type,ty:({send:'tr',withdraw:'wd'})[r.type]||r.type,
+    C.reqs=(reqs||[]).map(r=>({id:r.id,u:r.user_id,a:Number(r.amount||0),raw:r.type,ty:({send:'tr',withdraw:'wd',recharge:'rc',bill:'bill'})[r.type]||r.type,
       st:r.status==='pending'?'p':(r.status==='success'?'a':'r'),m:r.method||'System',trx:r.trx_id}));
   }catch(e){const em=(e&&(e.message||e.details||e.hint||e.code))||JSON.stringify(e);console.error('LOAD ERROR: '+em);
     let bn=document.getElementById('dberr');if(!bn){bn=document.createElement('div');bn.id='dberr';bn.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:#7f1d1d;color:#fff;font:13px/1.4 monospace;padding:10px 12px;border-radius:10px;word-break:break-all';document.body.appendChild(bn)}
@@ -606,12 +606,13 @@ function ensureRt(key,filter){
   const f=(t)=>filter?{event:'*',schema:'public',table:t,filter}:{event:'*',schema:'public',table:t};
   ch.on('postgres_changes',f('transactions'),kick);
   ch.on('postgres_changes',Object.assign(f('mt_chat'),{event:'INSERT'}),kick);
+  ch.on('postgres_changes',{event:'*',schema:'public',table:'mt_settings'},()=>{brandT=0;kick()});
   if(ROLE==='admin')ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'mtusers'},kick);
   ch.subscribe();rtch=ch}catch(_){rtch=null}}
 const chatErr=e=>/mt_chat|relation|schema cache|42P01|PGRST20/i.test(JSON.stringify(e||''));
 
 /* ---------- ADMIN ---------- */
-const TY={add:'অ্যাড মানি',withdraw:'উইথড্র',send:'সেন্ড মানি'};
+const TY={add:'অ্যাড মানি',withdraw:'উইথড্র',send:'সেন্ড মানি',recharge:'রিচার্জ',bill:'পে-বিল'};
 const AC=[];let acMax=0,acLoaded=false;
 const goReqs=()=>{const b=document.querySelector('[data-a="tab:reqs"]');b&&b.click()};
 function uName(uid,rows){
@@ -620,6 +621,7 @@ function uName(uid,rows){
  const m=(rows||AC).slice().reverse().find(x=>x.user_id===uid&&!x.from_admin&&x.user_name);return m?m.user_name:'ইউজার'}
 async function adminTick(){
  const s=SB();if(!s)return;
+ await brandAdmin().catch(()=>{});
  const r=await s.from('transactions').select('*').order('created_at',{ascending:false}).limit(40);
  if(!r.error&&r.data){
   const key='mtn-a-ids',st=LS(key),known=new Set(st?JSON.parse(st):[]),first=st===null;
@@ -710,6 +712,7 @@ const AP={open:0,uid:null,btn:null,pan:null,
 /* ---------- USER ---------- */
 const UV={ids:new Set(),view:null}; // খোলা লাইভ-চ্যাট ভিউ
 async function userTick(){
+ await brandUser().catch(()=>{});
  const s=SB(),St=SS();if(!s||!St||!St.uid)return;const uid=St.uid;
  ensureRt('u:'+uid,'user_id=eq.'+uid);
  const r=await s.from('transactions').select('id,status,type,amount').eq('user_id',uid).order('created_at',{ascending:false}).limit(40);
@@ -720,7 +723,7 @@ async function userTick(){
   if(ch.length){
    const ok=ch.filter(c=>c[1]==='ok').length;
    ch.slice(0,3).forEach(([x,n],i)=>{
-    const add=x.type==='add',lab=add?'অ্যাড মানি':x.type==='withdraw'?'উইথড্র':'সেন্ড মানি';
+    const add=x.type==='add',lab=TY[x.type]||'সেন্ড মানি';
     const o={t:n==='ok'?lab+' সফল হয়েছে':lab+' বাতিল হয়েছে',b:n==='ok'?(add?'৳'+bn(x.amount)+' আপনার ব্যালেন্সে যোগ হয়েছে':'৳'+bn(x.amount)+' এর অনুরোধ সম্পন্ন'):'৳'+bn(x.amount)+' এর অনুরোধ বাতিল হয়েছে',kind:n==='ok'?'ok':'no',go:()=>{const b=document.querySelector('.nav [data-go="hist"]');b&&b.click()}};
     if(i===0)notify(Object.assign({tone:n==='ok'?'ok':'no',tag:'tx'},o));else toast(o)});
    if(typeof loadUserData==='function')loadUserData(true)}
@@ -762,6 +765,32 @@ async function liveChat(E){
    if(x.error){d&&(d.style.opacity='.5');E.tt&&E.tt(L('মেসেজ যায়নি','Message failed'));return}
    LS('mtn-uc-'+St.uid,String(Math.max(+(LS('mtn-uc-'+St.uid)||0),x.data.id)))};
   Q('[data-s]').onclick=send;Q('#m').onkeydown=e=>{if(e.key==='Enter')send()}})}
+
+/* ---------- ব্র্যান্ড (নাম ও লোগো) সিঙ্ক ---------- */
+let brandT=0,brandFail=0;
+const brandSig=c=>(c.set.appName||'')+'|'+((c.set.appLogo||'').length)+'|'+(c.set.appLogo||'').slice(-30);
+async function brandAdmin(){
+ const s=SB(),c=CC();if(!s||!c||!c.set||Date.now()<brandFail)return;
+ const sig=brandSig(c),last=LS('mtn-brand-sig');
+ if(last===null){ // এই ব্রাউজারে প্রথমবার: সার্ভারে আগে থেকে থাকলে সেটাই নেবে, ওভাররাইট করবে না
+  const r=await s.from('mt_settings').select('*').eq('key','brand').maybeSingle();
+  if(r.error){brandFail=Date.now()+30000;return}
+  if(r.data&&r.data.value&&r.data.value.n){c.set.appName=r.data.value.n;c.set.appLogo=r.data.value.l||'';try{localStorage.setItem('mt-admin',JSON.stringify(c))}catch(_){}LS('mtn-brand-sig',brandSig(c));return}}
+ if(sig===LS('mtn-brand-sig'))return;
+ const r=await s.from('mt_settings').upsert({key:'brand',value:{n:c.set.appName||'Money Transfer',l:c.set.appLogo||''},updated_at:new Date().toISOString()});
+ if(r.error){brandFail=Date.now()+30000;return}
+ LS('mtn-brand-sig',sig);toast({t:'অ্যাপের নাম ও লোগো সেভ হয়েছে',b:'ইউজার অ্যাপে কয়েক সেকেন্ডে বদলে যাবে',kind:'ok'})}
+async function brandUser(force){
+ if(!force&&Date.now()-brandT<15000)return;brandT=Date.now();
+ const s=SB();if(!s)return;
+ const r=await s.from('mt_settings').select('*').eq('key','brand').maybeSingle();
+ if(r.error||!r.data||!r.data.value)return;
+ const v=r.data.value,B=window.MTBR||(window.MTBR={}),n=String(v.n||'Money Transfer'),l=String(v.l||'');
+ if(B.n===n&&B.l===l)return;
+ B.n=n;B.l=l;try{localStorage.setItem('mt-brand',JSON.stringify({n,l}))}catch(_){}
+ document.title=n;baseTitle=n;
+ try{if(typeof T!=='undefined'){T.bn.app=n;T.en.app=n}}catch(_){}
+ try{window.__mtRender&&window.__mtRender()}catch(_){}}
 
 /* ---------- অ্যাপ (Capacitor): অ্যাপ বন্ধ থাকলেও পুশ নোটিফিকেশন ---------- */
 const isNative=()=>{try{return !!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())}catch(_){return false}};

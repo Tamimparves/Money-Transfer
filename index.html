@@ -1,5 +1,10 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script>
+/* ===== ব্র্যান্ড: নাম ও লোগো (অ্যাডমিন থেকে বদলায়) ===== */
+window.MTBR=(function(){try{const v=JSON.parse(localStorage.getItem('mt-brand')||'null');if(v&&v.n)return{n:String(v.n),l:String(v.l||'')}}catch(_){}return{n:'Money Transfer',l:''}})();
+function BRN(){return String(window.MTBR.n).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function BRL(z){const l=window.MTBR.l;return /^data:image\//.test(l)||/^https?:\/\//.test(l)?`<img src="${l}" alt="" style="width:${z}px;height:${z}px;object-fit:contain;border-radius:inherit;display:block">`:'৳'}
+document.title=window.MTBR.n;
 /* ===== Supabase ===== */
 const SUPA_URL='https://ucyqfmhpakhqktarkphr.supabase.co';
 const SUPA_KEY='sb_publishable_TG-pGp2iue1WiMNBYABlvw_WRtjqwUS';
@@ -19,7 +24,7 @@ async function loadUserData(silent){
     const rows=t.data||[];
     const reserved=rows.filter(x=>x.type!=='add'&&mtStatus(x.status)==='pending').reduce((a,x)=>a+(+x.amount||0),0);
     const bal=Math.max(0,(w.data?+w.data.balance:0)-reserved);
-    const tx=rows.map(x=>({id:x.id,db:1,s:mtStatus(x.status),in:x.type==='add'?1:0,f:x.type==='add'?'💰':x.type==='withdraw'?'🏧':'💸',cur:'BDT',amt:+x.amount,bdt:+x.amount,name:x.type==='add'?'Add Money':x.type==='withdraw'?'Withdraw':'Send Money',num:x.trx_id||'-',d:mtDate(x.created_at)}));
+    const tx=rows.map(x=>({id:x.id,db:1,s:mtStatus(x.status),in:x.type==='add'?1:0,f:x.type==='add'?'💰':x.type==='withdraw'?'🏧':x.type==='recharge'?'📱':x.type==='bill'?'🧾':'💸',cur:'BDT',amt:+x.amount,bdt:+x.amount,name:x.type==='add'?'Add Money':x.type==='withdraw'?'Withdraw':x.type==='recharge'?'Recharge':x.type==='bill'?'Pay Bill':'Send Money',num:x.trx_id||'-',d:mtDate(x.created_at)}));
     let name=S.name,pr=S.pr;
     if(u.data){name=u.data.name||name;pr=Object.assign({},S.pr||{},{mob:u.data.mob||(S.pr&&S.pr.mob)||'',email:u.data.email||(S.pr&&S.pr.email)||''})}
     const sig=JSON.stringify([bal,name,tx.map(x=>[x.id,x.s])]);
@@ -33,8 +38,10 @@ async function syncTx(x){
   if(/^(Bonus|Promo)/.test(x.name||''))return;
   mtSyncing++;
   try{
-    const type=x.in?'add':/^Withdraw/.test(x.name||'')?'withdraw':'send';
-    const {error}=await sb.from('transactions').insert({id:x.id,user_id:S.uid,type,amount:x.bdt,status:'pending',trx_id:(x.num&&x.num!=='-')?String(x.num):'MT-'+Math.floor(Math.random()*1e6)});
+    const type=x.in?'add':/^Withdraw/.test(x.name||'')?'withdraw':(x.k||'send');
+    const row={id:x.id,user_id:S.uid,type,amount:x.bdt,status:'pending',trx_id:(x.num&&x.num!=='-')?String(x.num):'MT-'+Math.floor(Math.random()*1e6)};
+    let {error}=await sb.from('transactions').insert(row);
+    if(error&&type!=='send'&&type!=='add'&&type!=='withdraw'){row.type='send';({error}=await sb.from('transactions').insert(row))}
     if(error){x.db=0;console.error('syncTx',error)}
   }catch(e){x.db=0;console.error('syncTx',e)}
   mtSyncing--;
@@ -552,7 +559,7 @@ function conv(){const c=RATES[S.sel],a=parseFloat(S.amt)||0;return a*c.r}
 function home(){
  const c=RATES[S.sel],an=S.balAnim;
  return `<div class="scroll"><div class="hero pad">
-  <div class="brand"><div class="logo">৳</div>${t('app')}</div>
+  <div class="brand"><div class="logo">${BRL(22)}</div>${BRN()}</div>
   <div class="urow"><div class="avatar">${AV()}<i></i></div>
    <div class="uinfo"><b>${S.name||''} | ${t('personal')}</b><small>${t('acct')}: <span class="acn">${nm('123456789101')}</span><br>📍 ${t('dubai')}</small></div>
    <div style="display:flex;gap:8px">
@@ -825,7 +832,7 @@ const go2=fn=>{stk.push(fn);fn()},open=fn=>{stk=[];go2(fn)};
 function back(){stk.pop();if(stk.length)stk[stk.length-1]();else closeOv()}
 function closeOv(){stk=[];if(S.pend){S.pend=0;setTimeout(()=>{S.showBal=true;S.balAnim=true;armBal();render()},300)}const p=Q('.op');if(!p){ov.classList.remove('on');return}p.classList.add('out');setTimeout(()=>{ov.classList.remove('on');ov.innerHTML=''},260)}
 function done(m,s){stk=[];show(L('সম্পন্ন','Done'),`<div class="ok"><svg viewBox="0 0 52 52" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="26" cy="26" r="23"/><path d="M15 27l8 8 14-16"/></svg><h2>${m}</h2><p>${s||''}</p></div><button class="ob2" data-c>${L('ঠিক আছে','OK')}</button>`,()=>Q('[data-c]').onclick=closeOv)}
-function charge(a,label,icon,num){if(a>S.bal){tt(t('lowBal'));return false}S.bal-=a;S.tx.unshift({s:'success',f:icon,cur:'BDT',amt:a,bdt:a,name:label,num:num||'-',d:D()});render();return true}
+function charge(a,label,icon,num,kind){if(a>S.bal){tt(t('lowBal'));return false}S.bal-=a;S.tx.unshift({s:'success',f:icon,cur:'BDT',amt:a,bdt:a,name:label,num:num||'-',d:D(),k:kind});render();return true}
 const bad=()=>tt(L('তথ্য সঠিক দিন','Enter valid details'));
 function formPage(title,head,fields,btn,submit,extra){
  show(title,`<div class="oq">${head}</div><div class="oq">${fields.map(f=>`<label class="ol2">${f[1]}<input class="oin" id="${f[0]}" type="${f[2]==='pw'?'password':'text'}" inputmode="${f[2]==='pw'?'text':f[2]||'text'}" placeholder="${f[3]||''}" autocomplete="off"></label>`).join('')}${extra||''}</div><button class="ob2" data-s>${btn}</button>`,
@@ -838,7 +845,7 @@ function payBill(){let ty=-1;
  show(L('বিল পে','Pay Bill'),`<input class="oin" id="q" placeholder="${L('বিলার বা প্রতিষ্ঠানের নাম','Enter biller or organization name')}"><div class="oq"><b>${L('প্রতিষ্ঠানের ধরন','Organization Types')}</b><div class="og" style="margin-top:12px">${PT.map((p,i)=>`<button class="oi" data-i="${i}"><b>${p[0]}</b>${P3(p)}</button>`).join('')}</div></div><div class="oq"><b>${L('সব প্রতিষ্ঠান','All Organizations')}</b><div id="ol"></div></div>`,()=>{
  const list=()=>{const q=Q('#q').value.toLowerCase(),r=OR.map((o,i)=>[o,i]).filter(([o])=>(ty<0||o[2]===ty)&&o[1].toLowerCase().includes(q));
   Q('#ol').innerHTML=r.length?r.map(([o,i])=>`<button class="ol" data-o="${i}"><span class="em">${o[0]}</span><div><b>${o[1]}</b><small>${P3(PT[o[2]])}</small></div><span class="go">${L('পে','Pay')}</span></button>`).join(''):`<p class="sm">${L('কিছু পাওয়া যায়নি','Nothing found')}</p>`;
-  QA('[data-o]').forEach(b=>b.onclick=()=>{const o=OR[+b.dataset.o];go2(()=>formPage(o[1],`<div style="font-size:30px">${o[0]}</div><b>${o[1]}</b><div class="sm">${P3(PT[o[2]])}</div>${balH()}`,[['n',L('অ্যাকাউন্ট / গ্রাহক নম্বর','Account / customer no.'),'text','123456'],['a',t('amount'),'decimal','0']],t('confirm'),g=>{const a=parseFloat(dig(g('a')));if(!g('n')||!(a>0))return bad();if(charge(a,o[1],o[0],g('n')))done(L('বিল পরিশোধ হয়েছে','Bill paid'),`${o[1]} · ৳${fmt(a,0)}`)}))})};
+  QA('[data-o]').forEach(b=>b.onclick=()=>{const o=OR[+b.dataset.o];go2(()=>formPage(o[1],`<div style="font-size:30px">${o[0]}</div><b>${o[1]}</b><div class="sm">${P3(PT[o[2]])}</div>${balH()}`,[['n',L('অ্যাকাউন্ট / গ্রাহক নম্বর','Account / customer no.'),'text','123456'],['a',t('amount'),'decimal','0']],t('confirm'),g=>{const a=parseFloat(dig(g('a')));if(!g('n')||!(a>0))return bad();if(charge(a,o[1],o[0],g('n'),'bill'))done(L('বিল পরিশোধ হয়েছে','Bill paid'),`${o[1]} · ৳${fmt(a,0)}`)}))})};
  QA('.oi').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;ty=ty===i?-1:i;QA('.oi').forEach(x=>x.classList.toggle('on',+x.dataset.i===ty));list()});
  Q('#q').oninput=list;list()})}
 // ---- Recharge
@@ -851,7 +858,7 @@ function rechargePage(){let op=-1,ty=0,amt=0;
  sel('[data-p]',b=>op=+b.dataset.p);sel('[data-t]',b=>ty=+b.dataset.t);
  QA('[data-a]').forEach(b=>b.onclick=()=>{amt=+b.dataset.a;Q('#a').value=amt;QA('[data-a]').forEach(x=>x.classList.toggle('on',x===b))});
  QA('[data-q]').forEach(b=>b.onclick=()=>go2(()=>b.dataset.q==='o'?packs():autoPage(b.dataset.q==='p')));
- Q('[data-s]').onclick=()=>{const n=dig(Q('#n').value),a=parseFloat(dig(Q('#a').value));if(!/^01[3-9]\d{8}$/.test(n)||op<0||!(a>0))return tt(L('নম্বর, অপারেটর ও পরিমাণ দিন','Enter number, operator and amount'));if(charge(a,OP[op][0]+' '+(ty?L('পোস্টপেইড','Postpaid'):L('প্রিপেইড','Prepaid')),'📱',n))done(L('রিচার্জ সফল','Recharge successful'),`${n} · ৳${fmt(a,0)}`)}})}
+ Q('[data-s]').onclick=()=>{const n=dig(Q('#n').value),a=parseFloat(dig(Q('#a').value));if(!/^01[3-9]\d{8}$/.test(n)||op<0||!(a>0))return tt(L('নম্বর, অপারেটর ও পরিমাণ দিন','Enter number, operator and amount'));if(charge(a,OP[op][0]+' '+(ty?L('পোস্টপেইড','Postpaid'):L('প্রিপেইড','Prepaid')),'📱',n,'recharge'))done(L('রিচার্জ সফল','Recharge successful'),`${n} · ৳${fmt(a,0)}`)}})}
 function packs(){show(L('মাই অফার','My Offer'),`<div class="oq">${PK.map((p,i)=>`<button class="ol" data-k="${i}"><span class="em">📶</span><div><b>${p[0]}</b><small>${L('সব অপারেটর','All operators')}</small></div><span class="go">৳${fmt(p[1],0)}</span></button>`).join('')}</div>`,()=>QA('[data-k]').forEach(b=>b.onclick=()=>{const p=PK[+b.dataset.k];go2(()=>formPage(p[0],`<b>${p[0]}</b><div class="sm">৳${fmt(p[1],0)}</div>`,[['n',L('মোবাইল নম্বর','Mobile number'),'tel','01XXXXXXXXX']],t('confirm'),g=>{const n=dig(g('n'));if(!/^01[3-9]\d{8}$/.test(n))return bad();if(charge(p[1],p[0],'🎁',n))done(L('অফার কেনা হয়েছে','Offer purchased'),p[0])}))}))}
 function autoPage(pay){formPage(pay?L('অটো পে','Auto Pay'):L('অটো-রিচার্জ','Auto-Recharge'),`<div style="font-size:30px">${pay?'🔁':'⚙️'}</div><div class="sm">${L('নির্ধারিত সময়ে নিজে থেকে হবে','Runs automatically on schedule')}</div>`,[['n',L('মোবাইল নম্বর','Mobile number'),'tel','01XXXXXXXXX'],['a',t('amount'),'numeric','100']],L('চালু করুন','Enable'),g=>{const n=dig(g('n')),a=parseFloat(dig(g('a')));if(!/^01[3-9]\d{8}$/.test(n)||!(a>0))return bad();(S.auto=S.auto||[]).push({n,a,pay});done(L('চালু হয়েছে','Enabled'),`${n} · ৳${fmt(a,0)} / ${L('মাস','month')}`)},`<select class="oin" id="fq"><option>${L('প্রতি মাসে','Monthly')}</option><option>${L('প্রতি সপ্তাহে','Weekly')}</option></select>`)}
 // ---- transfers
@@ -870,7 +877,7 @@ function loan(){show(L('লোন','Loan'),`<div class="oq"><label class="ol2">$
  const c=()=>{const p=+Q('#r1').value,m=+Q('#r2').value,r=.01,e=p*r*Math.pow(1+r,m)/(Math.pow(1+r,m)-1);Q('#la').textContent='৳'+fmt(p,0);Q('#lm').textContent=nm(m);Q('#em').textContent='৳'+fmt(e,0);return[p,m,e]};
  ['#r1','#r2'].forEach(s=>Q(s).oninput=c);c();Q('[data-s]').onclick=()=>{const[p,m,e]=c();done(L('আবেদন জমা হয়েছে','Application submitted'),`৳${fmt(p,0)} · ${nm(m)} ${L('মাস','mo')} · EMI ৳${fmt(e,0)}`)}})}
 const helpline=()=>show(L('হেল্পলাইন','Helpline'),`<div class="oq"><a class="ol" href="tel:+8801856722155"><span class="em">📞</span><div><b>${L('কল করুন','Call us')}</b><small>+8801856722155</small></div></a><a class="ol" href="https://wa.me/8801856722155" target="_blank" rel="noopener"><span class="em">💬</span><div><b>WhatsApp</b><small>+8801856722155</small></div></a><div class="ol"><span class="em">🕒</span><div><b>${L('২৪/৭ সাপোর্ট','24/7 support')}</b><small>${L('যেকোনো সময় যোগাযোগ করুন','Reach us any time')}</small></div></div></div>`);
-const about=()=>show(L('সম্পর্কে','About'),`<div class="tu"><div class="te">৳</div><h2>Money Transfer</h2><p>${L('দ্রুত, নিরাপদ ও সহজ রেমিট্যান্স অ্যাপ। বিদেশ থেকে দেশে টাকা পাঠান মিনিটেই।','A fast, secure and simple remittance app. Send money home in minutes.')}</p><p class="sm" style="margin-top:10px">v1.0</p></div>`);
+const about=()=>show(L('সম্পর্কে','About'),`<div class="tu"><div class="te">${BRL(56)}</div><h2>${BRN()}</h2><p>${L('দ্রুত, নিরাপদ ও সহজ রেমিট্যান্স অ্যাপ। বিদেশ থেকে দেশে টাকা পাঠান মিনিটেই।','A fast, secure and simple remittance app. Send money home in minutes.')}</p><p class="sm" style="margin-top:10px">v1.0</p></div>`);
 const TS=[['💰',L('অ্যাড মানি','Add money'),L('ব্যালেন্সে টাকা যোগ করুন','Top up your balance')],['🧮',L('রেট দেখুন','Check rate'),L('ক্যালকুলেটরে দেশ ও পরিমাণ দিন','Enter country and amount in the calculator')],['📤',L('সেন্ড মানি','Send money'),L('প্রাপকের নাম ও নম্বর দিয়ে পাঠান','Send using recipient name and number')],['📜',L('হিস্ট্রি দেখুন','Track history'),L('পেন্ডিং ও সফল লেনদেন দেখুন','View pending and successful transfers')]];
 function tutorial(){let n=0;show(L('টিউটোরিয়াল','Tutorial'),`<div class="oq tu" id="tu"></div><div class="dts" id="dt"></div><div class="og g2"><button class="ob2 gh" data-p>${L('আগে','Back')}</button><button class="ob2" data-n></button></div>`,()=>{
  const paint=()=>{const s=TS[n];Q('#tu').innerHTML=`<div class="te">${s[0]}</div><h2>${s[1]}</h2><p>${s[2]}</p>`;Q('#dt').innerHTML=TS.map((_,i)=>`<i class="${i===n?'on':''}"></i>`).join('');Q('[data-n]').textContent=n===TS.length-1?L('শুরু করুন','Start'):L('পরের','Next')};
@@ -897,7 +904,7 @@ try{const p=JSON.parse(localStorage.getItem('mt-prof')||'null');if(p){S.name=p.n
 // ---- auth (demo, browser-local; use a real backend in production)
 const U=()=>{try{return JSON.parse(localStorage.getItem('mt-users'))||{}}catch(_){return{}}},SU=u=>{try{localStorage.setItem('mt-users',JSON.stringify(u))}catch(_){}};
 async function H(s){try{return[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))].map(b=>b.toString(16).padStart(2,'0')).join('')}catch(_){return btoa(unescape(encodeURIComponent(s)))}}
-function login(pre){show(L('লগইন','Login'),`<div class="tu"><div class="te">৳</div><h2>Money Transfer</h2></div><div class="oq"><label class="ol2">${L('ইউজারনেম','Username')}<input class="oin" id="u" value="${esc(pre||'')}" autocomplete="username"></label><label class="ol2">${L('পাসওয়ার্ড','Password')}<input class="oin" id="p" type="password" autocomplete="current-password"></label></div><button class="ob2" data-s>${L('লগইন','Login')}</button><button class="ob2 gh" data-r>${L('নতুন অ্যাকাউন্ট খুলুন','Create account')}</button>`,()=>{
+function login(pre){show(L('লগইন','Login'),`<div class="tu"><div class="te">${BRL(56)}</div><h2>${BRN()}</h2></div><div class="oq"><label class="ol2">${L('ইউজারনেম','Username')}<input class="oin" id="u" value="${esc(pre||'')}" autocomplete="username"></label><label class="ol2">${L('পাসওয়ার্ড','Password')}<input class="oin" id="p" type="password" autocomplete="current-password"></label></div><button class="ob2" data-s>${L('লগইন','Login')}</button><button class="ob2 gh" data-r>${L('নতুন অ্যাকাউন্ট খুলুন','Create account')}</button>`,()=>{
  Q('[data-r]').onclick=register;
  Q('[data-s]').onclick=async()=>{const un=Q('#u').value.trim().toLowerCase(),pw=Q('#p').value,us=U(),h=await H(pw);
   const ok=us[un]?us[un].p===h:false;
@@ -938,7 +945,7 @@ function patPage(mode,fin){let first=null;const c=LC(),v=mode==='verify';
   c.pat=await H('pat'+s);saveLC(c);fin()}))}
 function lockScreen(){const c=LC();if((!c.pat&&!c.fp)||document.getElementById('lk'))return;
  const el=document.createElement('div');el.id='lk';let fpFail=false;
- el.innerHTML=`<div class="lkb"><div class="te">🔒</div><h2 style="margin:6px 0">Money Transfer</h2><p class="sm" id="lm2">${c.pat?L('প্যাটার্ন আঁকুন','Draw your pattern'):L('ফিঙ্গারপ্রিন্ট দিয়ে আনলক করুন','Unlock with fingerprint')}</p>${c.pat?padHTML():''}${c.fp?`<button class="ob2" data-f>👆 ${L('ফিঙ্গারপ্রিন্ট','Fingerprint')}</button>`:''}<button class="ob2" data-x style="background:rgba(255,255,255,.18);color:#fff">${L('ভুলে গেছেন? লগইন','Forgot? Log in')}</button></div>`;
+ el.innerHTML=`<div class="lkb"><div class="te">🔒</div><h2 style="margin:6px 0">${BRN()}</h2><p class="sm" id="lm2">${c.pat?L('প্যাটার্ন আঁকুন','Draw your pattern'):L('ফিঙ্গারপ্রিন্ট দিয়ে আনলক করুন','Unlock with fingerprint')}</p>${c.pat?padHTML():''}${c.fp?`<button class="ob2" data-f>👆 ${L('ফিঙ্গারপ্রিন্ট','Fingerprint')}</button>`:''}<button class="ob2" data-x style="background:rgba(255,255,255,.18);color:#fff">${L('ভুলে গেছেন? লগইন','Forgot? Log in')}</button></div>`;
  document.body.appendChild(el);const q=s=>el.querySelector(s),msg=m=>q('#lm2').textContent=m;
  const unlock=()=>{el.classList.add('out');setTimeout(()=>el.remove(),300)};
  const fp=async()=>{try{await fpAuth(c.fp);unlock()}catch(_){fpFail=true;msg(c.pat?L('ফিঙ্গারপ্রিন্ট মেলেনি। প্যাটার্ন দিন, নতুন ফিঙ্গারপ্রিন্ট নিজে সেট হবে।','Fingerprint failed. Use pattern; the new fingerprint will be set automatically.'):L('ফিঙ্গারপ্রিন্ট মেলেনি, আবার চেষ্টা করুন','Fingerprint failed, try again'))}};
@@ -1160,7 +1167,7 @@ function auClose(){if(!au)return;const x=au;au=null;x.style.transition='opacity 
 function auShell(inner){
  if(!au){au=document.createElement('div');au.id='au';document.body.appendChild(au)}
  const e=au;e.classList.remove('out');
- e.innerHTML=`<div class="au-bg"><i class="o1"></i><i class="o2"></i><i class="o3"></i></div><div class="au-w"><div class="au-top"><button class="au-lang" data-al type="button">${ic('globe')}<span class="${bl()?'':'on'}">EN</span><span class="${bl()?'on':''}">বাং</span></button></div><div class="au-hero"><div class="au-logo">৳</div><h1>Money Transfer</h1><p>${L('দ্রুত, নিরাপদ ও সহজ রেমিট্যান্স','Fast, secure & simple remittance')}</p></div><div class="au-card"><div class="au-tabs" data-m="${auMode}"><button type="button" data-tab="in" class="${auMode==='in'?'on':''}">${L('লগইন','Log in')}</button><button type="button" data-tab="up" class="${auMode==='up'?'on':''}">${L('সাইন আপ','Sign up')}</button><u></u></div>${inner}</div></div>`;
+ e.innerHTML=`<div class="au-bg"><i class="o1"></i><i class="o2"></i><i class="o3"></i></div><div class="au-w"><div class="au-top"><button class="au-lang" data-al type="button">${ic('globe')}<span class="${bl()?'':'on'}">EN</span><span class="${bl()?'on':''}">বাং</span></button></div><div class="au-hero"><div class="au-logo">${BRL(62)}</div><h1>${BRN()}</h1><p>${L('দ্রুত, নিরাপদ ও সহজ রেমিট্যান্স','Fast, secure & simple remittance')}</p></div><div class="au-card"><div class="au-tabs" data-m="${auMode}"><button type="button" data-tab="in" class="${auMode==='in'?'on':''}">${L('লগইন','Log in')}</button><button type="button" data-tab="up" class="${auMode==='up'?'on':''}">${L('সাইন আপ','Sign up')}</button><u></u></div>${inner}</div></div>`;
  e.querySelector('[data-al]').onclick=()=>{const pre=(e.querySelector('#u')||{}).value;S.lang=bl()?'en':'bn';try{localStorage.setItem('mt-lang',S.lang)}catch(_){}render();auMode==='in'?login(pre):register()};
  e.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(b.dataset.tab===auMode)return;b.dataset.tab==='in'?login():register()});
  e.querySelectorAll('[data-eye]').forEach(b=>b.onclick=()=>{const i=b.parentNode.querySelector('input'),sh=i.type==='password';i.type=sh?'text':'password';b.innerHTML=ic(sh?'eyeoff':'eye')});
@@ -1713,7 +1720,7 @@ function chk(){let r='';try{r=localStorage.getItem('mt-admin')||''}catch(_){}if(
 // ---- login / sign-up celebration animations
 function welcome(kind,nm0){const o=document.createElement('div');o.className='wl';
  const nmx=nm0||S.name||S.user||'',cf=[...Array(30)].map(()=>`<i class="cf" style="--x:${Math.random()*100|0}%;--d:${(Math.random()*.9).toFixed(2)}s;--r:${Math.random()*720|0}deg;--c:${['#f6a31a','#fff','#ffd877','#4aa3ff','#ff7eb6'][Math.random()*5|0]}"></i>`).join('');
- o.innerHTML=`<div class="wl-c"><div class="wl-lg">৳</div><h2>${L('স্বাগতম, ','Welcome, ')}${esc(nmx)}!</h2><p>${L('আপনার অ্যাকাউন্ট প্রস্তুত','Your account is ready')}</p></div>${cf}`;
+ o.innerHTML=`<div class="wl-c"><div class="wl-lg">${BRL(48)}</div><h2>${L('স্বাগতম, ','Welcome, ')}${esc(nmx)}!</h2><p>${L('আপনার অ্যাকাউন্ট প্রস্তুত','Your account is ready')}</p></div>${cf}`;
  document.body.appendChild(o);setTimeout(()=>o.classList.add('out'),2000);setTimeout(()=>o.remove(),2500)}
 {const si=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k==='mt-users'&&this===localStorage){try{const o0=JSON.parse(this.getItem(k)||'{}'),n0=JSON.parse(v),a=Object.keys(o0).length,b=Object.keys(n0).length;if(b>a){const nk=Object.keys(n0).find(x=>!(x in o0));setTimeout(()=>welcome('up',(n0[nk]&&n0[nk].name)||nk),0)}}catch(_){}}return si.apply(this,arguments)}}
 // login button works even where form submit is blocked (sandboxed preview)
@@ -1757,7 +1764,7 @@ render=function(){
  saveW()};
 setInterval(saveW,3000);addEventListener('pagehide',saveW);
 setInterval(chk,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)chk()});
-chk();render();ready=true;
+chk();render();ready=true;window.__mtRender=()=>render();
 setInterval(()=>{if(!S.user)lastU=S.user},400);
 })();
 </script>
@@ -1996,12 +2003,13 @@ function ensureRt(key,filter){
   const f=(t)=>filter?{event:'*',schema:'public',table:t,filter}:{event:'*',schema:'public',table:t};
   ch.on('postgres_changes',f('transactions'),kick);
   ch.on('postgres_changes',Object.assign(f('mt_chat'),{event:'INSERT'}),kick);
+  ch.on('postgres_changes',{event:'*',schema:'public',table:'mt_settings'},()=>{brandT=0;kick()});
   if(ROLE==='admin')ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'mtusers'},kick);
   ch.subscribe();rtch=ch}catch(_){rtch=null}}
 const chatErr=e=>/mt_chat|relation|schema cache|42P01|PGRST20/i.test(JSON.stringify(e||''));
 
 /* ---------- ADMIN ---------- */
-const TY={add:'অ্যাড মানি',withdraw:'উইথড্র',send:'সেন্ড মানি'};
+const TY={add:'অ্যাড মানি',withdraw:'উইথড্র',send:'সেন্ড মানি',recharge:'রিচার্জ',bill:'পে-বিল'};
 const AC=[];let acMax=0,acLoaded=false;
 const goReqs=()=>{const b=document.querySelector('[data-a="tab:reqs"]');b&&b.click()};
 function uName(uid,rows){
@@ -2010,6 +2018,7 @@ function uName(uid,rows){
  const m=(rows||AC).slice().reverse().find(x=>x.user_id===uid&&!x.from_admin&&x.user_name);return m?m.user_name:'ইউজার'}
 async function adminTick(){
  const s=SB();if(!s)return;
+ await brandAdmin().catch(()=>{});
  const r=await s.from('transactions').select('*').order('created_at',{ascending:false}).limit(40);
  if(!r.error&&r.data){
   const key='mtn-a-ids',st=LS(key),known=new Set(st?JSON.parse(st):[]),first=st===null;
@@ -2100,6 +2109,7 @@ const AP={open:0,uid:null,btn:null,pan:null,
 /* ---------- USER ---------- */
 const UV={ids:new Set(),view:null}; // খোলা লাইভ-চ্যাট ভিউ
 async function userTick(){
+ await brandUser().catch(()=>{});
  const s=SB(),St=SS();if(!s||!St||!St.uid)return;const uid=St.uid;
  ensureRt('u:'+uid,'user_id=eq.'+uid);
  const r=await s.from('transactions').select('id,status,type,amount').eq('user_id',uid).order('created_at',{ascending:false}).limit(40);
@@ -2110,7 +2120,7 @@ async function userTick(){
   if(ch.length){
    const ok=ch.filter(c=>c[1]==='ok').length;
    ch.slice(0,3).forEach(([x,n],i)=>{
-    const add=x.type==='add',lab=add?'অ্যাড মানি':x.type==='withdraw'?'উইথড্র':'সেন্ড মানি';
+    const add=x.type==='add',lab=TY[x.type]||'সেন্ড মানি';
     const o={t:n==='ok'?lab+' সফল হয়েছে':lab+' বাতিল হয়েছে',b:n==='ok'?(add?'৳'+bn(x.amount)+' আপনার ব্যালেন্সে যোগ হয়েছে':'৳'+bn(x.amount)+' এর অনুরোধ সম্পন্ন'):'৳'+bn(x.amount)+' এর অনুরোধ বাতিল হয়েছে',kind:n==='ok'?'ok':'no',go:()=>{const b=document.querySelector('.nav [data-go="hist"]');b&&b.click()}};
     if(i===0)notify(Object.assign({tone:n==='ok'?'ok':'no',tag:'tx'},o));else toast(o)});
    if(typeof loadUserData==='function')loadUserData(true)}
@@ -2152,6 +2162,32 @@ async function liveChat(E){
    if(x.error){d&&(d.style.opacity='.5');E.tt&&E.tt(L('মেসেজ যায়নি','Message failed'));return}
    LS('mtn-uc-'+St.uid,String(Math.max(+(LS('mtn-uc-'+St.uid)||0),x.data.id)))};
   Q('[data-s]').onclick=send;Q('#m').onkeydown=e=>{if(e.key==='Enter')send()}})}
+
+/* ---------- ব্র্যান্ড (নাম ও লোগো) সিঙ্ক ---------- */
+let brandT=0,brandFail=0;
+const brandSig=c=>(c.set.appName||'')+'|'+((c.set.appLogo||'').length)+'|'+(c.set.appLogo||'').slice(-30);
+async function brandAdmin(){
+ const s=SB(),c=CC();if(!s||!c||!c.set||Date.now()<brandFail)return;
+ const sig=brandSig(c),last=LS('mtn-brand-sig');
+ if(last===null){ // এই ব্রাউজারে প্রথমবার: সার্ভারে আগে থেকে থাকলে সেটাই নেবে, ওভাররাইট করবে না
+  const r=await s.from('mt_settings').select('*').eq('key','brand').maybeSingle();
+  if(r.error){brandFail=Date.now()+30000;return}
+  if(r.data&&r.data.value&&r.data.value.n){c.set.appName=r.data.value.n;c.set.appLogo=r.data.value.l||'';try{localStorage.setItem('mt-admin',JSON.stringify(c))}catch(_){}LS('mtn-brand-sig',brandSig(c));return}}
+ if(sig===LS('mtn-brand-sig'))return;
+ const r=await s.from('mt_settings').upsert({key:'brand',value:{n:c.set.appName||'Money Transfer',l:c.set.appLogo||''},updated_at:new Date().toISOString()});
+ if(r.error){brandFail=Date.now()+30000;return}
+ LS('mtn-brand-sig',sig);toast({t:'অ্যাপের নাম ও লোগো সেভ হয়েছে',b:'ইউজার অ্যাপে কয়েক সেকেন্ডে বদলে যাবে',kind:'ok'})}
+async function brandUser(force){
+ if(!force&&Date.now()-brandT<15000)return;brandT=Date.now();
+ const s=SB();if(!s)return;
+ const r=await s.from('mt_settings').select('*').eq('key','brand').maybeSingle();
+ if(r.error||!r.data||!r.data.value)return;
+ const v=r.data.value,B=window.MTBR||(window.MTBR={}),n=String(v.n||'Money Transfer'),l=String(v.l||'');
+ if(B.n===n&&B.l===l)return;
+ B.n=n;B.l=l;try{localStorage.setItem('mt-brand',JSON.stringify({n,l}))}catch(_){}
+ document.title=n;baseTitle=n;
+ try{if(typeof T!=='undefined'){T.bn.app=n;T.en.app=n}}catch(_){}
+ try{window.__mtRender&&window.__mtRender()}catch(_){}}
 
 /* ---------- অ্যাপ (Capacitor): অ্যাপ বন্ধ থাকলেও পুশ নোটিফিকেশন ---------- */
 const isNative=()=>{try{return !!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())}catch(_){return false}};
