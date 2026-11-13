@@ -405,20 +405,27 @@ R();
 })();
 </script>
 <script>
-async function loadAdminData(){
+let __sig='';
+async function loadAdminData(quiet){
   try{
     const[{data:users,error:eu},{data:wallets,error:ew},{data:reqs,error:er}]=await Promise.all([
       sb.from('mtusers').select('*'),
       sb.from('wallets').select('*'),
       sb.from('transactions').select('*').order('created_at',{ascending:false})]);
     if(eu||ew||er)throw(eu||ew||er);
+    {const bn=document.getElementById('dberr');if(bn)bn.remove()}
+    if(quiet){const g=JSON.stringify([users,wallets,reqs]);if(g===__sig)return;const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;__sig=g}else __sig=JSON.stringify([users,wallets,reqs]);
     C.users=(users||[]).map(u=>{const w=(wallets||[]).find(x=>x.user_id===u.id);
-      return Object.assign({n:'',ph:'',add:0,st:1,pwl:[]},u,{n:u.n||u.name||u.full_name||'',ph:u.ph||u.phone||u.mobile||'',bal:w?Number(w.balance||0):0})});
+      return Object.assign({n:'',ph:'',add:0,st:1,pwl:[]},u,{n:u.n||u.name||u.full_name||'',ph:u.ph||u.phone||u.mobile||u.mob||'',bal:w?Number(w.balance||0):0})});
     C.reqs=(reqs||[]).map(r=>({id:r.id,u:r.user_id,a:Number(r.amount||0),raw:r.type,ty:({send:'tr',withdraw:'wd'})[r.type]||r.type,
       st:r.status==='pending'?'p':(r.status==='success'?'a':'r'),m:r.method||'System',trx:r.trx_id}));
-  }catch(e){console.error(e);tt('ডাটা লোড হয়নি: '+(e.message||e))}
+  }catch(e){const em=(e&&(e.message||e.details||e.hint||e.code))||JSON.stringify(e);console.error('LOAD ERROR: '+em);
+    let bn=document.getElementById('dberr');if(!bn){bn=document.createElement('div');bn.id='dberr';bn.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:#7f1d1d;color:#fff;font:13px/1.4 monospace;padding:10px 12px;border-radius:10px;word-break:break-all';document.body.appendChild(bn)}
+    bn.textContent='ডাটা লোড হয়নি / DB error: '+em+' | '+(typeof SUPA_URL!=='undefined'?SUPA_URL:'');if(quiet)return}
   R();
 }
 loadAdminData();
+setInterval(()=>{if(!document.hidden)loadAdminData(true)},6000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadAdminData(true)});
 </script>
 </body></html>
