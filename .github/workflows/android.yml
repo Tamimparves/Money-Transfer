@@ -49,7 +49,8 @@ jobs:
           {
             "appId": "${{ matrix.appId }}",
             "appName": "${{ matrix.appName }}",
-            "webDir": "www"
+            "webDir": "www",
+            "server": { "androidScheme": "https" }
           }
           JSON
 
@@ -57,6 +58,18 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+
+      - name: Permissions (fingerprint + notification)
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.USE_BIOMETRIC" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />#' "$M"
+          grep -n "uses-permission" "$M"
+
+      - name: Firebase config (push notification)
+        env:
+          GS: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GS" ]; then printf '%s' "$GS" > android/app/google-services.json; else echo "GOOGLE_SERVICES_JSON secret nei, push kaj korbe na"; fi
 
       - name: Build debug APK
         run: |
