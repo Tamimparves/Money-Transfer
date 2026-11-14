@@ -2248,7 +2248,7 @@ async function brandUser(force){
 /* ---------- অ্যাপ (Capacitor): অ্যাপ বন্ধ থাকলেও পুশ নোটিফিকেশন ---------- */
 const isNative=()=>{try{return !!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())}catch(_){return false}};
 let pushTok=null,pushSaved='',pushInit=0,pushBusy=0,pushNext=0,pushErr='';
-const pushLog=(m,e)=>{pushErr=m+(e?': '+(e.message||e.error||e.code||JSON.stringify(e)):'');try{console.error('[push]',pushErr);LS('mtn-pusherr',pushErr)}catch(_){}try{toast({t:'Push ডিবাগ',b:pushErr,kind:'bell',ms:12000})}catch(_){}};
+const pushLog=(m,e)=>{pushErr=m+(e?': '+(e.message||e.error||e.code||JSON.stringify(e)):'');try{console.error('[push]',pushErr);LS('mtn-pusherr',pushErr)}catch(_){}};
 async function nativePush(){
  if(!isNative()||pushInit)return;
  const PN=window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;
@@ -2294,7 +2294,7 @@ async function saveTok(force){
   // টেবিলে tone কলাম না থাকলে tone ছাড়া আবার চেষ্টা
   if(r.error&&/tone|PGRST204|42703/i.test((r.error.message||'')+(r.error.code||''))){delete row.tone;r=await s.from('mt_push_tokens').upsert(row,{onConflict:'token'})}
   if(r.error){pushLog('টোকেন সেভ ব্যর্থ',r.error);pushNext=Date.now()+30000}
-  else{pushSaved=k;pushErr='';try{toast({t:'Push ডিবাগ',b:'টোকেন সেভ হয়েছে ✓ ('+(isA?'admin':'user')+')',kind:'bell',ms:6000})}catch(_){}try{LS('mtn-pusherr','')}catch(_){}}
+  else{pushSaved=k;pushErr='';try{LS('mtn-pusherr','')}catch(_){}}
  }catch(e){pushLog('টোকেন সেভ ব্যর্থ',e);pushNext=Date.now()+30000}
  finally{pushBusy=0}}
 
