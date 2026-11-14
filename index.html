@@ -933,9 +933,11 @@ function register(){const up=(id,l)=>`<label class="up"><input type="file" accep
 Object.assign(I,{cog:'<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/>',doc:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',shield:'<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>'});
 const LC=()=>{try{return JSON.parse(localStorage.getItem('mt-lock'))||{}}catch(_){return{}}},saveLC=c=>{try{localStorage.setItem('mt-lock',JSON.stringify(c))}catch(_){}};
 const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))),ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-const fpOK=async()=>{try{return !!(isSecureContext&&window.PublicKeyCredential&&await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())}catch(_){return false}};
-async function fpEnroll(){const c=await navigator.credentials.create({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),rp:{name:'Money Transfer'},user:{id:crypto.getRandomValues(new Uint8Array(16)),name:S.user||'user',displayName:S.name||''},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged'},timeout:60000}});return b64(c.rawId)}
-const fpAuth=id=>navigator.credentials.get({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),allowCredentials:[{type:'public-key',id:ub(id)}],userVerification:'required',timeout:60000}});
+const BA=()=>{try{return window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.BiometricAuth}catch(_){return null}};
+const fpNat=()=>{try{return !!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()&&BA())}catch(_){return false}};
+const fpOK=async()=>{try{if(fpNat()){const r=await BA().checkBiometry();return !!r.isAvailable}return !!(isSecureContext&&window.PublicKeyCredential&&await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())}catch(_){return false}};
+async function fpEnroll(){if(fpNat()){await BA().authenticate({reason:'Fingerprint set',cancelTitle:'Cancel'});return 'native'}const c=await navigator.credentials.create({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),rp:{name:'Money Transfer'},user:{id:crypto.getRandomValues(new Uint8Array(16)),name:S.user||'user',displayName:S.name||''},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged'},timeout:60000}});return b64(c.rawId)}
+const fpAuth=id=>fpNat()?BA().authenticate({reason:'Unlock',cancelTitle:'Cancel'}):navigator.credentials.get({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),allowCredentials:[{type:'public-key',id:ub(id)}],userVerification:'required',timeout:60000}});
 const padHTML=()=>`<div class="pp" id="pp"><svg class="pl"></svg>${[...Array(9)].map(()=>'<i></i>').join('')}</div>`;
 function pad(el,cb){const dots=[...el.querySelectorAll('i')],svg=el.querySelector('svg');let seq=[],on=false;
  const reset=()=>{seq=[];dots.forEach(d=>d.classList.remove('on'));svg.innerHTML=''};
@@ -962,7 +964,15 @@ function lockScreen(){const c=LC();if((!c.pat&&!c.fp)||document.getElementById('
  if(c.fp){q('[data-f]').onclick=fp;setTimeout(fp,350)}
  if(c.pat)pad(q('#pp'),async(s,x)=>{if(await H('pat'+s)===c.pat){unlock();if(fpFail&&c.fp)setTimeout(async()=>{try{c.fp=await fpEnroll();saveLC(c);tt(L('নতুন ফিঙ্গারপ্রিন্ট সেট হয়েছে','New fingerprint set'))}catch(_){}},500)}else{x.err();msg(L('ভুল প্যাটার্ন','Wrong pattern'))}});
  q('[data-x]').onclick=()=>{try{localStorage.removeItem('mt-lock')}catch(_){}el.remove();open(()=>login())}}
-let hid=0;document.addEventListener('visibilitychange',()=>{if(document.hidden)hid=Date.now();else if(hid&&Date.now()-hid>15000)lockScreen()});
+/* অটো লক/লগআউট: AWAY_LOCK পর লক স্ক্রিন, AWAY_OUT (১০ মিনিট) পর আবার লগইন */
+const AWAY_LOCK=15000,AWAY_OUT=10*60000;let resumed=false;
+const touchLast=()=>{try{localStorage.setItem('mt-last',String(Date.now()))}catch(_){}};
+const forceOut=()=>{const l=document.getElementById('lk');l&&l.remove();try{sb.auth.signOut()}catch(_){}setSess(null);S.user=null;S.uid=null;S.bal=0;S.tx=[];mtSig='';login()};
+const awayCheck=()=>{try{if(!S.user&&!S.uid)return;const last=+localStorage.getItem('mt-last')||0,gone=last?Date.now()-last:0;if(gone>AWAY_OUT)forceOut();else if(gone>AWAY_LOCK)lockScreen()}catch(_){}};
+document.addEventListener('visibilitychange',()=>{if(document.hidden){touchLast();resumed=false}else{awayCheck();resumed=true;touchLast()}});
+addEventListener('pagehide',touchLast);
+setInterval(()=>{if(resumed&&!document.hidden)touchLast()},4000);
+{const t0=Date.now(),iv=setInterval(()=>{if(S.user||S.uid||Date.now()-t0>6000){clearInterval(iv);awayCheck();resumed=true;touchLast()}},300)}
 function settings(){const c=LC();show(L('সেটিংস','Settings'),`<div class="oq"><b>${L('অ্যাপ লক','App lock')}</b>
  <div class="ol"><span class="em">👆</span><div><b>${L('ফিঙ্গারপ্রিন্ট লক','Fingerprint lock')}</b><small>${L('ফোনে সেট করা ফিঙ্গারপ্রিন্ট দিয়ে আনলক','Unlock with the fingerprint saved on your phone')}</small></div><button class="sw ${c.fp?'on':''}" data-sw="fp" aria-label="fingerprint"></button></div>
  <div class="ol"><span class="em">🔐</span><div><b>${L('প্যাটার্ন লক','Pattern lock')}</b><small>${L('নিজের প্যাটার্ন আঁকুন','Draw your own pattern')}</small></div><button class="sw ${c.pat?'on':''}" data-sw="pat" aria-label="pattern"></button></div>
