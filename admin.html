@@ -798,19 +798,30 @@ async function brandUser(force){
 
 /* ---------- অ্যাপ (Capacitor): অ্যাপ বন্ধ থাকলেও পুশ নোটিফিকেশন ---------- */
 const isNative=()=>{try{return !!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())}catch(_){return false}};
-let pushTok=null,pushSaved='';
+let pushTok=null,pushSaved='',pushInit=0,pushBusy=0,pushNext=0,pushErr='';
+const pushLog=(m,e)=>{pushErr=m+(e?': '+(e.message||e.error||e.code||JSON.stringify(e)):'');try{console.error('[push]',pushErr);LS('mtn-pusherr',pushErr)}catch(_){}};
 async function nativePush(){
- if(!isNative())return;
- const PN=window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;if(!PN)return;
+ if(!isNative()||pushInit)return;
+ const PN=window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;
+ if(!PN){pushLog('PushNotifications প্লাগইন পাওয়া যায়নি');return}
+ pushInit=1;
  try{
-  await nativeChannels();
-  let p=await PN.checkPermissions();if(p.receive!=='granted')p=await PN.requestPermissions();
-  if(p.receive!=='granted')return;
-  PN.addListener('registration',t=>{pushTok=t.value;saveTok()});
+  try{await nativeChannels()}catch(_){}
+  // FCM টোকেন পেলেই (getToken-এর সমতুল্য) সেভ হবে
+  PN.addListener('registration',t=>{pushTok=t.value;try{LS('mtn-fcm',pushTok)}catch(_){}saveTok(true)});
+  PN.addListener('registrationError',e=>pushLog('FCM registrationError',e));
   PN.addListener('pushNotificationActionPerformed',()=>{try{kick()}catch(_){}});
-  await PN.register();
-  setInterval(saveTok,4000);
- }catch(_){}}
+  const reg=async()=>{try{
+   let p=await PN.checkPermissions();if(p.receive!=='granted')p=await PN.requestPermissions();
+   if(p.receive!=='granted'){pushLog('নোটিফিকেশন অনুমতি পাওয়া যায়নি');return}
+   await PN.register();
+  }catch(e){pushLog('PN.register ব্যর্থ',e)}};
+  await reg();
+  // লগইনের পর uid তৈরি হলেই সেভ হবে; টোকেন না এলে মাঝে মাঝে আবার register
+  let n=0;setInterval(()=>{if(!pushTok&&++n%8===0)reg();saveTok()},4000);
+  // অ্যাপ আবার খুললে (resume) টোকেন নতুন করে সেভ
+  try{const Ap=window.Capacitor.Plugins.App;Ap&&Ap.addListener('appStateChange',s=>{if(s&&s.isActive){pushSaved='';pushNext=0;reg()}})}catch(_){}
+ }catch(e){pushLog('nativePush ব্যর্থ',e)}}
 const CH_CATS=[['orders','নতুন অর্ডার'],['chat','চ্যাট মেসেজ'],['ok','সফল'],['no','বাতিল']];
 async function nativeChannels(){
  if(!isNative())return;const PN=window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;if(!PN)return;
@@ -819,13 +830,24 @@ async function nativeChannels(){
   if(prev&&prev!==id)for(const [c] of CH_CATS){try{await PN.deleteChannel({id:c+'_'+prev})}catch(_){}}
   for(const [c,n] of CH_CATS)await PN.createChannel({id:c+'_'+id,name:n,importance:5,sound:'tone_'+id+'_'+c+'.wav',vibration:true,visibility:1});
   LS('mtn-chpack',id)}catch(_){}}
-async function saveTok(){
- const s=SB();if(!s||!pushTok)return;
- const St=SS(),uid=ROLE==='admin'?null:(St&&St.uid);
- if(ROLE!=='admin'&&!uid)return;
+async function saveTok(force){
+ const s=SB();if(!s||!pushTok||pushBusy)return;
+ if(!force&&Date.now()<pushNext)return;
+ const isA=ROLE==='admin',St=SS();
+ let uid=isA?null:(St&&St.uid);
+ if(!isA&&!uid){try{const g=await s.auth.getSession();uid=g&&g.data&&g.data.session&&g.data.session.user.id}catch(_){}}
+ if(!isA&&!uid)return; // ইউজার এখনো লগইন করেনি
  const k=pushTok+'|'+uid+'|'+packId();if(k===pushSaved)return;
- const r=await s.from('mt_push_tokens').upsert({token:pushTok,user_id:uid,role:ROLE==='admin'?'admin':'user',tone:packId(),updated_at:new Date().toISOString()});
- if(!r.error)pushSaved=k}
+ pushBusy=1;
+ try{
+  const row={token:pushTok,user_id:uid,role:isA?'admin':'user',tone:packId(),updated_at:new Date().toISOString()};
+  let r=await s.from('mt_push_tokens').upsert(row,{onConflict:'token'});
+  // টেবিলে tone কলাম না থাকলে tone ছাড়া আবার চেষ্টা
+  if(r.error&&/tone|PGRST204|42703/i.test((r.error.message||'')+(r.error.code||''))){delete row.tone;r=await s.from('mt_push_tokens').upsert(row,{onConflict:'token'})}
+  if(r.error){pushLog('টোকেন সেভ ব্যর্থ',r.error);pushNext=Date.now()+30000}
+  else{pushSaved=k;pushErr='';try{LS('mtn-pusherr','')}catch(_){}}
+ }catch(e){pushLog('টোকেন সেভ ব্যর্থ',e);pushNext=Date.now()+30000}
+ finally{pushBusy=0}}
 
 /* ---------- চালু করা ---------- */
 window.MTN={play,notify,toast,liveChat,tick,askPerm};

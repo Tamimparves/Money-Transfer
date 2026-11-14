@@ -967,7 +967,7 @@ function lockScreen(){const c=LC();if((!c.pat&&!c.fp)||document.getElementById('
 /* অটো লক/লগআউট: AWAY_LOCK পর লক স্ক্রিন, AWAY_OUT (১০ মিনিট) পর আবার লগইন */
 const AWAY_LOCK=15000,AWAY_OUT=10*60000;let resumed=false;
 const touchLast=()=>{try{localStorage.setItem('mt-last',String(Date.now()))}catch(_){}};
-const forceOut=()=>{const l=document.getElementById('lk');l&&l.remove();try{sb.auth.signOut()}catch(_){}setSess(null);S.user=null;S.uid=null;S.bal=0;S.tx=[];mtSig='';login()};
+const forceOut=async()=>{if(forceOut.b)return;forceOut.b=1;const l=document.getElementById('lk');l&&l.remove();await mtLogout();setSess(null);S.user=null;S.uid=null;S.bal=0;S.tx=[];mtSig='';forceOut.b=0;login('',true)};
 const awayCheck=()=>{try{if(!S.user&&!S.uid)return;const last=+localStorage.getItem('mt-last')||0,gone=last?Date.now()-last:0;if(gone>AWAY_OUT)forceOut();else if(gone>AWAY_LOCK)lockScreen()}catch(_){}};
 document.addEventListener('visibilitychange',()=>{if(document.hidden){touchLast();resumed=false}else{awayCheck();resumed=true;touchLast()}});
 addEventListener('pagehide',touchLast);
@@ -1193,13 +1193,29 @@ function auShell(inner){
  e.querySelectorAll('[data-eye]').forEach(b=>b.onclick=()=>{const i=b.parentNode.querySelector('input'),sh=i.type==='password';i.type=sh?'text':'password';b.innerHTML=ic(sh?'eyeoff':'eye')});
  return e}
 const spin='<i class="au-sp"></i>';
-function login(pre){auMode='in';
- const e=auShell(`<form class="au-f" id="auf" novalidate>
- <label class="au-i"><span>${ic('user')}</span><input id="u" placeholder=" " value="${esc(typeof pre==='string'?pre:'')}" autocomplete="username" autocapitalize="none" spellcheck="false"><b>${L('ইউজারনেম','Username')}</b></label>
+/* সর্বশেষ ইউজার মনে রাখা: লগআউটের পর ইউজারনেম অটো দেখাবে; ফিঙ্গারপ্রিন্ট চালু থাকলে ফিঙ্গারপ্রিন্টেও লগইন */
+const RU=()=>{try{return JSON.parse(localStorage.getItem('mt-ru'))||null}catch(_){return null}};
+const saveRU=o=>{try{o?localStorage.setItem('mt-ru',JSON.stringify(o)):localStorage.removeItem('mt-ru')}catch(_){}};
+let auFresh=false;
+async function mtLogout(){
+ const un=S.user;if(!un){try{await sb.auth.signOut()}catch(_){}return}
+ const ru={un,name:S.name||un};let keep=false;
+ try{if(LC().fp){const g=await sb.auth.getSession(),se=g&&g.data&&g.data.session;if(se){ru.tok={a:se.access_token,r:se.refresh_token};keep=true}}}catch(_){}
+ saveRU(ru);
+ try{await sb.auth.signOut(keep?{scope:'local'}:undefined)}catch(_){}}
+function login(pre,auto){auMode='in';
+ const ru=RU(),fpOn=!!LC().fp;
+ if(ru&&ru.tok&&!fpOn){delete ru.tok;saveRU(ru)}
+ const rem=(!auFresh&&ru&&ru.un&&(typeof pre!=='string'||!pre||pre===ru.un))?ru:null;
+ const pu=rem?rem.un:(typeof pre==='string'?pre:''),canFp=!!(rem&&rem.tok&&fpOn);
+ const who=rem?`<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:14px;border-radius:16px;background:color-mix(in srgb,var(--brand) 10%,transparent)"><div style="width:44px;height:44px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex:none">${esc([...(rem.name||rem.un)][0].toUpperCase())}</div><div style="flex:1;min-width:0"><div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(rem.name||rem.un)}</div><div style="font-size:12px;opacity:.65">@${esc(rem.un)}</div></div><button type="button" class="au-lk" data-sw>${L('অন্য অ্যাকাউন্ট','Switch')}</button></div>`:'';
+ const e=auShell(`<form class="au-f" id="auf" novalidate>${who}
+ ${rem?`<input id="u" type="hidden" value="${esc(pu)}">`:`<label class="au-i"><span>${ic('user')}</span><input id="u" placeholder=" " value="${esc(pu)}" autocomplete="username" autocapitalize="none" spellcheck="false"><b>${L('ইউজারনেম','Username')}</b></label>`}
  <label class="au-i"><span>${ic('lock')}</span><input id="p" type="password" placeholder=" " autocomplete="current-password"><b>${L('পাসওয়ার্ড','Password')}</b><button type="button" class="au-eye" data-eye aria-label="show password">${ic('eye')}</button></label>
  <div class="au-r"><label class="au-ck"><input type="checkbox" id="rm" checked><i></i>${L('মনে রাখুন','Remember me')}</label><button type="button" class="au-lk" data-fg>${L('পাসওয়ার্ড ভুলে গেছেন?','Forgot password?')}</button></div>
  <div class="au-er" id="er" role="alert"></div>
  <button class="au-bt" type="submit"><span>${L('লগইন করুন','Log in')}</span>${spin}</button></form>
+ ${canFp?`<button type="button" class="au-bt" data-fpl style="margin-top:12px;background:transparent;color:var(--brand);border:1.5px solid var(--brand);box-shadow:none"><span>👆 ${L('ফিঙ্গারপ্রিন্ট দিয়ে লগইন','Log in with fingerprint')}</span></button>`:''}
  <div class="au-tr"><span>🔒 ${L('সুরক্ষিত','Secure')}</span><span>⚡ ${L('দ্রুত','Instant')}</span><span>🛡️ ${L('ভেরিফাইড','Verified')}</span></div>
  `);
  e.querySelector('[data-fg]').onclick=()=>tt(L('পাসওয়ার্ড রিসেটের জন্য সাপোর্টে যোগাযোগ করুন: +8801856722155','Contact support to reset: +8801856722155'));
@@ -1212,9 +1228,21 @@ function login(pre){auMode='in';
   let ok=false,net=false;try{const r=await sb.auth.signInWithPassword({email:mtEmail(un),password:pw});if(!r.error&&r.data&&r.data.user){ok=true;S.uid=r.data.user.id}else if(r.error&&/fetch|network|timeout/i.test(r.error.message||''))net=true}catch(_){net=true}
   if(!ok&&net){bt.classList.remove('ld');bt.disabled=false;return auErr(L('সার্ভারে কানেক্ট হচ্ছে না। ইন্টারনেট চেক করুন','Cannot reach server. Check internet'))}
   if(!ok){bt.classList.remove('ld');bt.disabled=false;if(++fails>=5){fails=0;until=Date.now()+30000}f.classList.remove('shk');void f.offsetWidth;f.classList.add('shk');return auErr(L('ইউজারনেম বা পাসওয়ার্ড ভুল','Wrong username or password'))}
-  fails=0;S.user=un;setSess(un,e.querySelector('#rm').checked);await loadUserData();
-  bt.classList.remove('ld');bt.classList.add('dn');bt.innerHTML='✓';
-  setTimeout(()=>{render();document.body.classList.add('mt-in');setTimeout(()=>document.body.classList.remove('mt-in'),900);auClose();setTimeout(()=>tt(L('স্বাগতম, '+(S.name||un)+'!','Welcome, '+(S.name||un)+'!')),350)},550)}}
+  fails=0;auFresh=false;await done(bt,un,e.querySelector('#rm').checked)};
+ const sw=e.querySelector('[data-sw]');if(sw)sw.onclick=()=>{auFresh=true;login()};
+ const fb=e.querySelector('[data-fpl]');
+ const fpLogin=async()=>{if(!fb||!rem||!rem.tok||fb.disabled)return;
+  try{await fpAuth(LC().fp)}catch(_){return auErr(L('ফিঙ্গারপ্রিন্ট মেলেনি','Fingerprint failed'))}
+  fb.disabled=true;let ok=false,net=false;
+  try{const r=await sb.auth.setSession({access_token:rem.tok.a,refresh_token:rem.tok.r});if(!r.error&&r.data&&r.data.session){ok=true;S.uid=r.data.session.user.id}else if(r.error&&/fetch|network|timeout/i.test(r.error.message||''))net=true}catch(_){net=true}
+  if(!ok){fb.disabled=false;if(!net){delete rem.tok;saveRU(rem)}return auErr(net?L('সার্ভারে কানেক্ট হচ্ছে না। ইন্টারনেট চেক করুন','Cannot reach server. Check internet'):L('সেশনের মেয়াদ শেষ। পাসওয়ার্ড দিয়ে লগইন করুন','Session expired. Log in with password'))}
+  fails=0;auFresh=false;await done(fb,rem.un,true)};
+ if(fb){fb.onclick=fpLogin;if(auto)setTimeout(fpLogin,450)}
+ else if(rem)setTimeout(()=>{const p=e.querySelector('#p');p&&p.focus()},350)}
+async function done(bt,un,keep){
+ S.user=un;setSess(un,keep);await loadUserData();saveRU({un,name:S.name||un});
+ bt.classList.remove('ld');bt.classList.add('dn');bt.innerHTML='✓';
+ setTimeout(()=>{render();document.body.classList.add('mt-in');setTimeout(()=>document.body.classList.remove('mt-in'),900);auClose();setTimeout(()=>tt(L('স্বাগতম, '+(S.name||un)+'!','Welcome, '+(S.name||un)+'!')),350)},550)}
 const fi=(id,ico,lab,o={})=>`<label class="au-i"><span>${ic(ico)}</span><input id="${id}" type="${o.t||'text'}" placeholder=" " value="${esc(rg[id]||'')}" autocomplete="${o.a||'off'}" ${o.m?`inputmode="${o.m}"`:''}><b>${lab}</b>${o.eye?`<button type="button" class="au-eye" data-eye aria-label="show">${ic('eye')}</button>`:''}</label>`;
 // ---- country picker (all countries + real flag images, emoji fallback)
 const CCX=new Set('AC CP DG EA EU EZ IC TA UN XA XB QO ZZ'.split(' '));
@@ -1278,7 +1306,7 @@ function register(){auMode='up';
 // ---- wiring
 const TL={0:addMoney,1:withdraw,2:MB,3:payBill,4:BK,5:rechargePage,6:offers,7:loan,8:helpline,9:live,10:grp,11:tutorial},SO={vip:vipP,benef:benefP,pack:packP,chName:nameP,chPass:passP,chAv:avP2,editp:editP,settings,stmt,about,tut:tutorial};
 document.addEventListener('click',e=>{const el=e.target.closest('[data-tile],[data-soon],[data-act="logout"],[data-act="add"]');if(!el)return;const d=el.dataset;
- const f=d.tile!==undefined?TL[+d.tile]:d.soon?SO[d.soon]:d.act==='logout'?()=>{try{sb.auth.signOut()}catch(_){}setSess(null);S.user=null;S.uid=null;S.bal=0;S.tx=[];mtSig='';login()}:d.act==='add'?addMoney:null;
+ const f=d.tile!==undefined?TL[+d.tile]:d.soon?SO[d.soon]:d.act==='logout'?async()=>{await mtLogout();setSess(null);S.user=null;S.uid=null;S.bal=0;S.tx=[];mtSig='';login()}:d.act==='add'?addMoney:null;
  if(f){e.stopImmediatePropagation();e.preventDefault();open(()=>f())}},true);
 document.addEventListener('pointerdown',e=>{const b=e.target.closest('.ob2,.oi,.ol');if(!b||!ov.contains(b))return;const r=b.getBoundingClientRect(),s=document.createElement('span');s.className='rp';s.style.left=e.clientX-r.left+'px';s.style.top=e.clientY-r.top+'px';b.appendChild(s);setTimeout(()=>s.remove(),650)},true);
 })();
@@ -2219,19 +2247,30 @@ async function brandUser(force){
 
 /* ---------- অ্যাপ (Capacitor): অ্যাপ বন্ধ থাকলেও পুশ নোটিফিকেশন ---------- */
 const isNative=()=>{try{return !!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())}catch(_){return false}};
-let pushTok=null,pushSaved='';
+let pushTok=null,pushSaved='',pushInit=0,pushBusy=0,pushNext=0,pushErr='';
+const pushLog=(m,e)=>{pushErr=m+(e?': '+(e.message||e.error||e.code||JSON.stringify(e)):'');try{console.error('[push]',pushErr);LS('mtn-pusherr',pushErr)}catch(_){}};
 async function nativePush(){
- if(!isNative())return;
- const PN=window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;if(!PN)return;
+ if(!isNative()||pushInit)return;
+ const PN=window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;
+ if(!PN){pushLog('PushNotifications প্লাগইন পাওয়া যায়নি');return}
+ pushInit=1;
  try{
-  await nativeChannels();
-  let p=await PN.checkPermissions();if(p.receive!=='granted')p=await PN.requestPermissions();
-  if(p.receive!=='granted')return;
-  PN.addListener('registration',t=>{pushTok=t.value;saveTok()});
+  try{await nativeChannels()}catch(_){}
+  // FCM টোকেন পেলেই (getToken-এর সমতুল্য) সেভ হবে
+  PN.addListener('registration',t=>{pushTok=t.value;try{LS('mtn-fcm',pushTok)}catch(_){}saveTok(true)});
+  PN.addListener('registrationError',e=>pushLog('FCM registrationError',e));
   PN.addListener('pushNotificationActionPerformed',()=>{try{kick()}catch(_){}});
-  await PN.register();
-  setInterval(saveTok,4000);
- }catch(_){}}
+  const reg=async()=>{try{
+   let p=await PN.checkPermissions();if(p.receive!=='granted')p=await PN.requestPermissions();
+   if(p.receive!=='granted'){pushLog('নোটিফিকেশন অনুমতি পাওয়া যায়নি');return}
+   await PN.register();
+  }catch(e){pushLog('PN.register ব্যর্থ',e)}};
+  await reg();
+  // লগইনের পর uid তৈরি হলেই সেভ হবে; টোকেন না এলে মাঝে মাঝে আবার register
+  let n=0;setInterval(()=>{if(!pushTok&&++n%8===0)reg();saveTok()},4000);
+  // অ্যাপ আবার খুললে (resume) টোকেন নতুন করে সেভ
+  try{const Ap=window.Capacitor.Plugins.App;Ap&&Ap.addListener('appStateChange',s=>{if(s&&s.isActive){pushSaved='';pushNext=0;reg()}})}catch(_){}
+ }catch(e){pushLog('nativePush ব্যর্থ',e)}}
 const CH_CATS=[['orders','নতুন অর্ডার'],['chat','চ্যাট মেসেজ'],['ok','সফল'],['no','বাতিল']];
 async function nativeChannels(){
  if(!isNative())return;const PN=window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;if(!PN)return;
@@ -2240,13 +2279,24 @@ async function nativeChannels(){
   if(prev&&prev!==id)for(const [c] of CH_CATS){try{await PN.deleteChannel({id:c+'_'+prev})}catch(_){}}
   for(const [c,n] of CH_CATS)await PN.createChannel({id:c+'_'+id,name:n,importance:5,sound:'tone_'+id+'_'+c+'.wav',vibration:true,visibility:1});
   LS('mtn-chpack',id)}catch(_){}}
-async function saveTok(){
- const s=SB();if(!s||!pushTok)return;
- const St=SS(),uid=ROLE==='admin'?null:(St&&St.uid);
- if(ROLE!=='admin'&&!uid)return;
+async function saveTok(force){
+ const s=SB();if(!s||!pushTok||pushBusy)return;
+ if(!force&&Date.now()<pushNext)return;
+ const isA=ROLE==='admin',St=SS();
+ let uid=isA?null:(St&&St.uid);
+ if(!isA&&!uid){try{const g=await s.auth.getSession();uid=g&&g.data&&g.data.session&&g.data.session.user.id}catch(_){}}
+ if(!isA&&!uid)return; // ইউজার এখনো লগইন করেনি
  const k=pushTok+'|'+uid+'|'+packId();if(k===pushSaved)return;
- const r=await s.from('mt_push_tokens').upsert({token:pushTok,user_id:uid,role:ROLE==='admin'?'admin':'user',tone:packId(),updated_at:new Date().toISOString()});
- if(!r.error)pushSaved=k}
+ pushBusy=1;
+ try{
+  const row={token:pushTok,user_id:uid,role:isA?'admin':'user',tone:packId(),updated_at:new Date().toISOString()};
+  let r=await s.from('mt_push_tokens').upsert(row,{onConflict:'token'});
+  // টেবিলে tone কলাম না থাকলে tone ছাড়া আবার চেষ্টা
+  if(r.error&&/tone|PGRST204|42703/i.test((r.error.message||'')+(r.error.code||''))){delete row.tone;r=await s.from('mt_push_tokens').upsert(row,{onConflict:'token'})}
+  if(r.error){pushLog('টোকেন সেভ ব্যর্থ',r.error);pushNext=Date.now()+30000}
+  else{pushSaved=k;pushErr='';try{LS('mtn-pusherr','')}catch(_){}}
+ }catch(e){pushLog('টোকেন সেভ ব্যর্থ',e);pushNext=Date.now()+30000}
+ finally{pushBusy=0}}
 
 /* ---------- চালু করা ---------- */
 window.MTN={play,notify,toast,liveChat,tick,askPerm};
